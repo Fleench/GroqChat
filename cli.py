@@ -2,6 +2,7 @@ import os
 import json
 from datetime import datetime
 from groq import Groq
+from termcolor import colored
 
 # --- CONFIGURATION ---
 
@@ -77,6 +78,11 @@ def print_welcome_message():
     print("  /exit         - Exit the application.")
     print("-" * 21)
 
+# --- COLOR DEFINITIONS ---
+USER_COLOR = "blue"
+ASSISTANT_COLOR = "green"
+SYSTEM_COLOR = "yellow"
+ERROR_COLOR = "red"
 
 # --- MAIN APPLICATION LOGIC ---
 
@@ -89,11 +95,19 @@ def main():
     save_chat_to_file(active_filename, messages)
     
     print_welcome_message()
-    print(f"[System] New chat started. Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'")
+    print(colored(f"[System] New chat started. Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'", SYSTEM_COLOR))
 
     while True:
         try:
-            user_input = input("\nYou: ").strip()
+            # --- MODIFIED INPUT FOR MULTI-LINE ---
+            print(colored("\nYou (type an empty line to send):", USER_COLOR))
+            user_input_lines = []
+            while True:
+                line = input()
+                if not line:
+                    break
+                user_input_lines.append(line)
+            user_input = "\n".join(user_input_lines).strip()
 
             if not user_input:
                 continue
@@ -106,13 +120,13 @@ def main():
                 if command == "/new":
                     messages, active_filename = get_new_session_state()
                     save_chat_to_file(active_filename, messages)
-                    print("\n[System] New chat session started.")
-                    print(f"[System] Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'")
+                    print(colored("\n[System] New chat session started.", SYSTEM_COLOR))
+                    print(colored(f"[System] Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'", SYSTEM_COLOR))
                     continue
 
                 elif command == "/save":
                     if len(command_parts) < 2:
-                        print("\n[Error] Usage: /save <filename>")
+                        print(colored("\n[Error] Usage: /save <filename>", ERROR_COLOR))
                         continue
                     filename = command_parts[1]
                     if not filename.endswith('.chat'):
@@ -121,12 +135,12 @@ def main():
                     if success:
                         # **CHANGE**: The saved file is now the active file for autosaving.
                         active_filename = filename
-                        print(f"\n[System] Chat saved. Active file is now '{path}'")
+                        print(colored(f"\n[System] Chat saved. Active file is now '{path}'", SYSTEM_COLOR))
                     continue
                 
                 elif command == "/load":
                     if len(command_parts) < 2:
-                        print("\n[Error] Usage: /load <filename>")
+                        print(colored("\n[Error] Usage: /load <filename>", ERROR_COLOR))
                         continue
                     filename = command_parts[1]
                     if not filename.endswith('.chat'):
@@ -136,22 +150,22 @@ def main():
                         messages = loaded_messages
                         # **CHANGE**: The loaded file is now the active file for autosaving.
                         active_filename = filename
-                        print(f"\n[System] Chat from '{filename}' loaded and is now the active file.")
+                        print(colored(f"\n[System] Chat from '{filename}' loaded and is now the active file.", SYSTEM_COLOR))
                         # Display last message for context.
                         if len(messages) > 1:
-                           print(f"[System] Last message: \"{messages[-1]['content'][:50]}...\"")
+                           print(colored(f"[System] Last message: \"{messages[-1]['content'][:50]}...\"", SYSTEM_COLOR))
                         else:
-                           print(f"[System] Chat is empty or contains only a system prompt.")
+                           print(colored(f"[System] Chat is empty or contains only a system prompt.", SYSTEM_COLOR))
                     continue
 
                 elif command == "/system":
-                    new_prompt = input("Enter new system prompt: ").strip()
+                    new_prompt = input(colored("Enter new system prompt: ", SYSTEM_COLOR)).strip()
                     if new_prompt:
                         messages[0] = {"role": "system", "content": new_prompt}
-                        print("\n[System] System prompt updated.")
+                        print(colored("\n[System] System prompt updated.", SYSTEM_COLOR))
                         save_chat_to_file(active_filename, messages)
                     else:
-                        print("\n[System] System prompt not changed (input was empty).")
+                        print(colored("\n[System] System prompt not changed (input was empty).", SYSTEM_COLOR))
                     continue
                 
                 elif command == "/help":
@@ -159,11 +173,11 @@ def main():
                     continue
 
                 elif command == "/exit":
-                    print("\n[System] Goodbye!")
+                    print(colored("\n[System] Goodbye!", SYSTEM_COLOR))
                     break
 
                 else:
-                    print(f"\n[Error] Unknown command: {command}. Type /help for options.")
+                    print(colored(f"\n[Error] Unknown command: {command}. Type /help for options.", ERROR_COLOR))
                     continue
 
             # --- CHAT PROCESSING ---
@@ -172,7 +186,7 @@ def main():
             # Autosave to the currently active file before the API call
             save_chat_to_file(active_filename, messages)
 
-            print("\nAssistant: ", end="", flush=True)
+            print(colored("\nAssistant: ", ASSISTANT_COLOR), end="", flush=True)
             
             try:
                 chat_completion = client.chat.completions.create(
@@ -187,7 +201,7 @@ def main():
                 for chunk in chat_completion:
                     content = chunk.choices[0].delta.content or ""
                     assistant_response += content
-                    print(content, end="", flush=True)
+                    print(colored(content, ASSISTANT_COLOR), end="", flush=True)
 
                 print() # Final newline after streaming is complete
 
@@ -197,17 +211,17 @@ def main():
                     save_chat_to_file(active_filename, messages)
 
             except Exception as e:
-                print(f"\n[API Error] An error occurred: {e}")
+                print(colored(f"\n[API Error] An error occurred: {e}", ERROR_COLOR))
                 # Remove the user message that caused the error to prevent loops
                 messages.pop()
                 continue
 
 
         except KeyboardInterrupt:
-            print("\n\n[System] Interrupt received. Exiting.")
+            print(colored("\n\n[System] Interrupt received. Exiting.", SYSTEM_COLOR))
             break
         except Exception as e:
-            print(f"\n[Fatal Error] An unexpected error occurred: {e}")
+            print(colored(f"\n[Fatal Error] An unexpected error occurred: {e}", ERROR_COLOR))
             break
 
 if __name__ == "__main__":
