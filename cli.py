@@ -78,6 +78,26 @@ def print_welcome_message():
     print("  /exit         - Exit the application.")
     print("-" * 21)
 
+def find_latest_autosave_file(current_active_filename):
+    """Finds the most recent 'autosave-*.chat' file, excluding the current_active_filename."""
+    if not os.path.exists(CHAT_HISTORY_DIR):
+        return None
+
+    autosave_files = [
+        f for f in os.listdir(CHAT_HISTORY_DIR)
+        if f.startswith("autosave-") and f.endswith(".chat") and f != current_active_filename
+    ]
+
+    if not autosave_files:
+        return None
+
+    # Sort by modification time, newest first
+    autosave_files.sort(
+        key=lambda f: os.path.getmtime(os.path.join(CHAT_HISTORY_DIR, f)),
+        reverse=True
+    )
+    return autosave_files[0]
+
 # --- COLOR DEFINITIONS ---
 USER_COLOR = "blue"
 ASSISTANT_COLOR = "green"
@@ -140,22 +160,41 @@ def main():
                 
                 elif command == "/load":
                     if len(command_parts) < 2:
-                        print(colored("\n[Error] Usage: /load <filename>", ERROR_COLOR))
-                        continue
-                    filename = command_parts[1]
-                    if not filename.endswith('.chat'):
-                        filename += '.chat'
-                    loaded_messages = load_chat_from_file(filename)
-                    if loaded_messages:
-                        messages = loaded_messages
-                        # **CHANGE**: The loaded file is now the active file for autosaving.
-                        active_filename = filename
-                        print(colored(f"\n[System] Chat from '{filename}' loaded and is now the active file.", SYSTEM_COLOR))
-                        # Display last message for context.
-                        if len(messages) > 1:
-                           print(colored(f"[System] Last message: \"{messages[-1]['content'][:50]}...\"", SYSTEM_COLOR))
+                        # No filename provided, try to load the last non-active autosave
+                        latest_autosave = find_latest_autosave_file(active_filename)
+                        if latest_autosave:
+                            print(colored(f"\n[System] Loading last autosave file: '{latest_autosave}'...", SYSTEM_COLOR))
+                            loaded_messages = load_chat_from_file(latest_autosave)
+                            if loaded_messages:
+                                messages = loaded_messages
+                                active_filename = latest_autosave # Set as active
+                                print(colored(f"\n[System] Chat from '{latest_autosave}' loaded and is now the active file.", SYSTEM_COLOR))
+                                if len(messages) > 1:
+                                   print(colored(f"[System] Last message: \"{messages[-1]['content'][:50]}...\"", SYSTEM_COLOR))
+                                else:
+                                   print(colored(f"[System] Chat is empty or contains only a system prompt.", SYSTEM_COLOR))
+                            else:
+                                # This case should ideally not happen if find_latest_autosave_file found a file
+                                # and load_chat_from_file failed, but good to have a fallback.
+                                print(colored(f"\n[Error] Could not load autosave file '{latest_autosave}'.", ERROR_COLOR))
                         else:
-                           print(colored(f"[System] Chat is empty or contains only a system prompt.", SYSTEM_COLOR))
+                            print(colored("\n[System] No other autosave files found to load.", SYSTEM_COLOR))
+                    else:
+                        # Filename provided, load specific file
+                        filename = command_parts[1]
+                        if not filename.endswith('.chat'):
+                            filename += '.chat'
+                        loaded_messages = load_chat_from_file(filename)
+                        if loaded_messages:
+                            messages = loaded_messages
+                            # **CHANGE**: The loaded file is now the active file for autosaving.
+                            active_filename = filename
+                            print(colored(f"\n[System] Chat from '{filename}' loaded and is now the active file.", SYSTEM_COLOR))
+                            # Display last message for context.
+                            if len(messages) > 1:
+                               print(colored(f"[System] Last message: \"{messages[-1]['content'][:50]}...\"", SYSTEM_COLOR))
+                            else:
+                               print(colored(f"[System] Chat is empty or contains only a system prompt.", SYSTEM_COLOR))
                     continue
 
                 elif command == "/system":
