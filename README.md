@@ -39,5 +39,5 @@ Run `python cli.py sort` to create these folders and organise any existing files
 - `/new` start a new chat session
 - `/save <name>` save the current chat
 - `/load <name>` load a saved chat
-- `/chats` browse chat history in a terminal interface
+- `/chats` browse chat history starting with a list of subdirectories
 
