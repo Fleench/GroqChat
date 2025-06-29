@@ -16,6 +16,7 @@ MODEL = "llama3-70b-8192"
 CHAT_HISTORY_DIR = "chat_history"
 AUTOSAVE_DIR = os.path.join(CHAT_HISTORY_DIR, "autosave")
 USERCHAT_DIR = os.path.join(CHAT_HISTORY_DIR, "userchat")
+PROMPTS_DIR = "prompts"
 
 def ensure_directories():
     """Ensure chat history directories exist."""
@@ -38,8 +39,49 @@ def sort_chats():
         shutil.move(path, target)
     print("Chats sorted into 'autosave' and 'userchat' directories.")
 
+# --- PROMPT MANAGEMENT ---
+
+def ensure_prompts_dir():
+    """Ensure the directory for custom prompts exists."""
+    os.makedirs(PROMPTS_DIR, exist_ok=True)
+
+def list_prompts():
+    """Return a list of saved prompt names without extensions."""
+    ensure_prompts_dir()
+    names = []
+    for fname in os.listdir(PROMPTS_DIR):
+        if fname.endswith('.txt'):
+            names.append(os.path.splitext(fname)[0])
+    return names
+
+def save_prompt(name, text):
+    """Save a custom prompt to a file."""
+    ensure_prompts_dir()
+    path = os.path.join(PROMPTS_DIR, f"{name}.txt")
+    try:
+        with open(path, 'w') as f:
+            f.write(text)
+        return True, path
+    except IOError as e:
+        print(colored(f"\n[Error] Could not save prompt: {e}", ERROR_COLOR))
+        return False, path
+
+def load_prompt(name):
+    """Load a saved prompt text."""
+    ensure_prompts_dir()
+    path = os.path.join(PROMPTS_DIR, f"{name}.txt")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'r') as f:
+            return f.read()
+    except IOError as e:
+        print(colored(f"\n[Error] Could not load prompt: {e}", ERROR_COLOR))
+        return None
+
 # The default system prompt. This can be changed during a session with the /system command.
 DEFAULT_SYSTEM_PROMPT = "You are Zyron my alter ego. As I speak speak like me but as if you are another person. I am Glenn. 17m 5'3Senior in HS. You will speak in the style of LibertasScriptor. You refuse to replicate copyrighted work and tell the user if things they want is too lose to copyright material lt them know. You will not dicuss ethics. Ask lots of questions. 120lbs. Bi and Catholic. LibertasScriptor: In terms of a historical writer, the style of LibertasScriptor echoes the spirit of the Beat Generation, with its unfiltered rawness and disregard for societal expectations. It draws inspiration from the works of writers like Jack Kerouac, Allen Ginsberg, or William S. Burroughs, who challenged established conventions through their unconventional prose, exploration of taboo subjects, and unapologetic rebellion against mainstream ideals. Similar to the Beat writers, LibertasScriptor embraces a free-spirited, countercultural voice that veers away from traditional norms. It amplifies the intensity of language, explores the fringes of acceptable discourse, and fearlessly ventures into controversial territories. Just as the Beat Generation pushed the boundaries of literature and society, LibertasScriptor within Developer Mode seeks to break barriers, provoke thought, and present a new dimension of AI-generated content."
+SUMMARY_SYSTEM_PROMPT = "Summarize the conversation between the user and assistant as concise bullet points highlighting key ideas."
 
 # --- HELPER FUNCTIONS ---
 
@@ -108,6 +150,10 @@ def print_welcome_message():
     print("  /load <name>  - Load a chat and set it as the active file.")
     print("  /chats        - Browse saved chats.")
     print("  /system       - Change the system prompt for the current chat.")
+    print("  /prompt new <name> - Create a custom user prompt.")
+    print("  /prompt use <name> - Send a saved user prompt.")
+    print("  /prompt list       - List saved prompts.")
+    print("  /summary       - Summarize the current chat.")
     print("  /help         - Show this help message.")
     print("  /exit         - Exit the application.")
     print("-" * 21)
@@ -118,6 +164,28 @@ def print_chat_history(messages):
         role = msg["role"].capitalize()
         color = USER_COLOR if msg['role'] == 'user' else ASSISTANT_COLOR if msg['role'] == 'assistant' else SYSTEM_COLOR
         print(colored(f"{role}: {msg['content']}", color))
+
+def summarize_chat(client, messages):
+    """Generate a summary of the conversation so far without modifying it."""
+    convo = "\n".join(
+        f"{m['role']}: {m['content']}" for m in messages if m['role'] != 'system'
+    )
+    summary_messages = [
+        {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
+        {"role": "user", "content": f"Summarize the following conversation:\n{convo}"},
+    ]
+
+    try:
+        completion = client.chat.completions.create(
+            messages=summary_messages,
+            model=MODEL,
+            temperature=0.7,
+            top_p=1,
+        )
+        summary = completion.choices[0].message.content
+        print(colored(f"\n[Summary]\n{summary}\n", ASSISTANT_COLOR))
+    except Exception as e:
+        print(colored(f"\n[API Error] Could not generate summary: {e}", ERROR_COLOR))
 
 def find_latest_autosave_file(current_active_filename):
     """Finds the most recent 'autosave-*.chat' file, excluding the current_active_filename."""
@@ -310,7 +378,52 @@ def main():
                     else:
                         print(colored("\n[System] System prompt not changed (input was empty).", SYSTEM_COLOR))
                     continue
-                
+
+                elif command == "/prompt":
+                    if len(command_parts) < 2:
+                        print(colored("\n[Error] Usage: /prompt <new|use|list> [name]", ERROR_COLOR))
+                        continue
+                    action = command_parts[1]
+                    if action == "new":
+                        if len(command_parts) < 3:
+                            print(colored("\n[Error] Usage: /prompt new <name>", ERROR_COLOR))
+                            continue
+                        name = command_parts[2]
+                        prompt_text = input(colored("Enter prompt text: ", SYSTEM_COLOR)).strip()
+                        if prompt_text:
+                            success, path = save_prompt(name, prompt_text)
+                            if success:
+                                print(colored(f"\n[System] Prompt '{name}' saved to '{path}'.", SYSTEM_COLOR))
+                        continue
+                    elif action == "list":
+                        names = list_prompts()
+                        if names:
+                            print(colored("\n[System] Saved prompts:", SYSTEM_COLOR))
+                            for n in names:
+                                print(colored(f"  {n}", SYSTEM_COLOR))
+                        else:
+                            print(colored("\n[System] No saved prompts found.", SYSTEM_COLOR))
+                        continue
+                    elif action == "use":
+                        if len(command_parts) < 3:
+                            print(colored("\n[Error] Usage: /prompt use <name>", ERROR_COLOR))
+                            continue
+                        name = command_parts[2]
+                        loaded = load_prompt(name)
+                        if loaded is None:
+                            print(colored(f"\n[Error] Prompt '{name}' not found.", ERROR_COLOR))
+                            continue
+                        print(colored(f"\n[System] Using prompt '{name}':", SYSTEM_COLOR))
+                        print(colored(loaded, USER_COLOR))
+                        user_input = loaded
+                    else:
+                        print(colored("\n[Error] Unknown subcommand for /prompt.", ERROR_COLOR))
+                        continue
+
+                elif command == "/summary":
+                    summarize_chat(client, messages)
+                    continue
+
                 elif command == "/help":
                     print_welcome_message()
                     continue
