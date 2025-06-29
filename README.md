@@ -45,3 +45,7 @@ Run `python cli.py sort` to create these folders and organise any existing files
 - `/prompt list` list saved prompts
 - `/summary` generate a summary of the current conversation
 
+The chat interface automatically trims context to the most recent 10
+messages. The system prompt is always included when sending requests to
+the model.
+
