@@ -458,7 +458,7 @@ def main():
             
             try:
                 chat_completion = client.chat.completions.create(
-                    messages=messages,
+                    messages=messages[-10],
                     model=MODEL,
                     temperature=0.7,
                     top_p=1,
