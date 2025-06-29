@@ -106,6 +106,7 @@ def print_welcome_message():
     print("  /new          - Start a new chat session.")
     print("  /save <name>  - Save the current chat and set it as the active file.")
     print("  /load <name>  - Load a chat and set it as the active file.")
+    print("  /chats        - Browse saved chats.")
     print("  /system       - Change the system prompt for the current chat.")
     print("  /help         - Show this help message.")
     print("  /exit         - Exit the application.")
@@ -136,6 +137,53 @@ def find_latest_autosave_file(current_active_filename):
         reverse=True
     )
     return os.path.join("autosave", autosave_files[0])
+
+def browse_chats():
+    """Interactive file browser for chat history."""
+    ensure_directories()
+
+    chats = []
+    for directory in [AUTOSAVE_DIR, USERCHAT_DIR]:
+        for fname in os.listdir(directory):
+            if fname.endswith(".chat"):
+                path = os.path.join(directory, fname)
+                chats.append((os.path.getmtime(path), os.path.relpath(path, CHAT_HISTORY_DIR)))
+
+    if not chats:
+        print(colored("\n[System] No chats found.", SYSTEM_COLOR))
+        return None
+
+    chats.sort(key=lambda x: x[0], reverse=True)
+    file_list = [c[1] for c in chats]
+
+    import curses
+
+    def ui(stdscr):
+        curses.curs_set(0)
+        idx = 0
+        while True:
+            stdscr.clear()
+            h, w = stdscr.getmaxyx()
+            for i, fname in enumerate(file_list):
+                prefix = "-> " if i == idx else "   "
+                if i < h - 2:
+                    stdscr.addstr(i, 0, (prefix + fname)[: w - 1])
+            stdscr.addstr(h - 1, 0, "Use arrows, Enter to open, Esc to cancel")
+            key = stdscr.getch()
+            if key == curses.KEY_UP:
+                idx = (idx - 1) % len(file_list)
+            elif key == curses.KEY_DOWN:
+                idx = (idx + 1) % len(file_list)
+            elif key in (10, 13):
+                return file_list[idx]
+            elif key == 27:  # ESC
+                return None
+
+    try:
+        return curses.wrapper(ui)
+    except Exception as e:
+        print(colored(f"\n[Error] Unable to open browser: {e}", ERROR_COLOR))
+        return None
 
 # --- COLOR DEFINITIONS ---
 USER_COLOR = "blue"
@@ -227,6 +275,17 @@ def main():
                             active_filename = loaded_path or filename
                             print(colored(f"\n[System] Chat from '{filename}' loaded and is now the active file.", SYSTEM_COLOR))
                             # Display last message for context.
+                            print_chat_history(messages)
+                    continue
+
+                elif command == "/chats":
+                    selected = browse_chats()
+                    if selected:
+                        loaded_messages, loaded_path = load_chat_from_file(selected)
+                        if loaded_messages:
+                            messages = loaded_messages
+                            active_filename = loaded_path or selected
+                            print(colored(f"\n[System] Chat from '{selected}' loaded and is now the active file.", SYSTEM_COLOR))
                             print_chat_history(messages)
                     continue
 
