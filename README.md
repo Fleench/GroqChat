@@ -40,4 +40,8 @@ Run `python cli.py sort` to create these folders and organise any existing files
 - `/save <name>` save the current chat
 - `/load <name>` load a saved chat
 - `/chats` browse chat history starting with a list of subdirectories
+- `/prompt new <name>` create a reusable prompt
+- `/prompt use <name>` send a saved prompt as your message
+- `/prompt list` list saved prompts
+- `/summary` generate a summary of the current conversation
 
