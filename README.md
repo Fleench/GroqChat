@@ -2,6 +2,12 @@
 
 GroqChat is a minimal command-line chat interface for Groq's language model. The script stores chat history locally so you can resume conversations at any time.
 
+Chat history is kept in the `chat_history/` folder with two subdirectories:
+* `autosave/`  – files automatically created while chatting
+* `userchat/` – chats you explicitly save with `/save`
+
+Run `python cli.py sort` to create these folders and organise any existing files.
+
 ## Usage
 
 1. **Set your API key**

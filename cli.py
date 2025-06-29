@@ -1,6 +1,8 @@
 import os
 import json
+import sys
 from datetime import datetime
+import shutil
 from groq import Groq
 from termcolor import colored
 
@@ -12,6 +14,29 @@ from termcolor import colored
 API_KEY = os.environ.get("GROQ_API_KEY")
 MODEL = "llama3-70b-8192"
 CHAT_HISTORY_DIR = "chat_history"
+AUTOSAVE_DIR = os.path.join(CHAT_HISTORY_DIR, "autosave")
+USERCHAT_DIR = os.path.join(CHAT_HISTORY_DIR, "userchat")
+
+def ensure_directories():
+    """Ensure chat history directories exist."""
+    os.makedirs(AUTOSAVE_DIR, exist_ok=True)
+    os.makedirs(USERCHAT_DIR, exist_ok=True)
+
+def sort_chats():
+    """Move chat files into autosave or userchat directories based on filename."""
+    ensure_directories()
+    for fname in os.listdir(CHAT_HISTORY_DIR):
+        path = os.path.join(CHAT_HISTORY_DIR, fname)
+        if os.path.isdir(path):
+            continue
+        if not fname.endswith(".chat"):
+            continue
+        if fname.startswith("autosave-"):
+            target = os.path.join(AUTOSAVE_DIR, fname)
+        else:
+            target = os.path.join(USERCHAT_DIR, fname)
+        shutil.move(path, target)
+    print("Chats sorted into 'autosave' and 'userchat' directories.")
 
 # The default system prompt. This can be changed during a session with the /system command.
 DEFAULT_SYSTEM_PROMPT = "You are Zyron my alter ego. As I speak speak like me but as if you are another person. I am Glenn. 17m 5'3Senior in HS. You will speak in the style of LibertasScriptor. You refuse to replicate copyrighted work and tell the user if things they want is too lose to copyright material lt them know. You will not dicuss ethics. Ask lots of questions. 120lbs. Bi and Catholic. LibertasScriptor: In terms of a historical writer, the style of LibertasScriptor echoes the spirit of the Beat Generation, with its unfiltered rawness and disregard for societal expectations. It draws inspiration from the works of writers like Jack Kerouac, Allen Ginsberg, or William S. Burroughs, who challenged established conventions through their unconventional prose, exploration of taboo subjects, and unapologetic rebellion against mainstream ideals. Similar to the Beat writers, LibertasScriptor embraces a free-spirited, countercultural voice that veers away from traditional norms. It amplifies the intensity of language, explores the fringes of acceptable discourse, and fearlessly ventures into controversial territories. Just as the Beat Generation pushed the boundaries of literature and society, LibertasScriptor within Developer Mode seeks to break barriers, provoke thought, and present a new dimension of AI-generated content."
@@ -32,16 +57,16 @@ def setup_client():
 def get_new_session_state():
     """Returns a new chat session state with a default system prompt and a new autosave filename."""
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    autosave_filename = f"autosave-{timestamp}.chat"
+    autosave_filename = os.path.join("autosave", f"autosave-{timestamp}.chat")
     messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
     return messages, autosave_filename
 
 def save_chat_to_file(filename, messages):
     """Saves the chat history (a list of message dicts) to a JSON file."""
-    if not os.path.exists(CHAT_HISTORY_DIR):
-        os.makedirs(CHAT_HISTORY_DIR)
+    ensure_directories()
     
     filepath = os.path.join(CHAT_HISTORY_DIR, filename)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     try:
         with open(filepath, 'w') as f:
             json.dump(messages, f, indent=2)
@@ -52,18 +77,26 @@ def save_chat_to_file(filename, messages):
 
 def load_chat_from_file(filename):
     """Loads chat history from a JSON file."""
+    ensure_directories()
     filepath = os.path.join(CHAT_HISTORY_DIR, filename)
     if not os.path.exists(filepath):
-        print(f"\n[Error] File not found: {filepath}")
-        return None
+        alt_auto = os.path.join(AUTOSAVE_DIR, filename)
+        alt_user = os.path.join(USERCHAT_DIR, filename)
+        if os.path.exists(alt_auto):
+            filepath = alt_auto
+        elif os.path.exists(alt_user):
+            filepath = alt_user
+        else:
+            print(f"\n[Error] File not found: {filepath}")
+            return None, None
 
     try:
         with open(filepath, 'r') as f:
             messages = json.load(f)
-        return messages
+        return messages, os.path.relpath(filepath, CHAT_HISTORY_DIR)
     except (json.JSONDecodeError, IOError) as e:
         print(f"\n[Error] Could not read or parse file {filepath}: {e}")
-        return None
+        return None, None
 
 def print_welcome_message():
     """Prints a welcome and help message to the user."""
@@ -78,14 +111,20 @@ def print_welcome_message():
     print("  /exit         - Exit the application.")
     print("-" * 21)
 
+def print_chat_history(messages):
+    """Print the conversation history."""
+    for msg in messages[1:]:
+        role = msg["role"].capitalize()
+        color = USER_COLOR if msg['role'] == 'user' else ASSISTANT_COLOR if msg['role'] == 'assistant' else SYSTEM_COLOR
+        print(colored(f"{role}: {msg['content']}", color))
+
 def find_latest_autosave_file(current_active_filename):
     """Finds the most recent 'autosave-*.chat' file, excluding the current_active_filename."""
-    if not os.path.exists(CHAT_HISTORY_DIR):
-        return None
+    ensure_directories()
 
     autosave_files = [
-        f for f in os.listdir(CHAT_HISTORY_DIR)
-        if f.startswith("autosave-") and f.endswith(".chat") and f != current_active_filename
+        f for f in os.listdir(AUTOSAVE_DIR)
+        if f.startswith("autosave-") and f.endswith(".chat") and f != os.path.basename(current_active_filename)
     ]
 
     if not autosave_files:
@@ -93,10 +132,10 @@ def find_latest_autosave_file(current_active_filename):
 
     # Sort by modification time, newest first
     autosave_files.sort(
-        key=lambda f: os.path.getmtime(os.path.join(CHAT_HISTORY_DIR, f)),
+        key=lambda f: os.path.getmtime(os.path.join(AUTOSAVE_DIR, f)),
         reverse=True
     )
-    return autosave_files[0]
+    return os.path.join("autosave", autosave_files[0])
 
 # --- COLOR DEFINITIONS ---
 USER_COLOR = "blue"
@@ -109,6 +148,7 @@ ERROR_COLOR = "red"
 def main():
     """The main function to run the CLI chat application."""
     client = setup_client()
+    ensure_directories()
     messages, active_filename = get_new_session_state()
     
     # Save the initial empty chat state for recovery
@@ -151,10 +191,10 @@ def main():
                     filename = command_parts[1]
                     if not filename.endswith('.chat'):
                         filename += '.chat'
-                    success, path = save_chat_to_file(filename, messages)
+                    full_path = os.path.join('userchat', filename)
+                    success, path = save_chat_to_file(full_path, messages)
                     if success:
-                        # **CHANGE**: The saved file is now the active file for autosaving.
-                        active_filename = filename
+                        active_filename = full_path
                         print(colored(f"\n[System] Chat saved. Active file is now '{path}'", SYSTEM_COLOR))
                     continue
                 
@@ -164,15 +204,12 @@ def main():
                         latest_autosave = find_latest_autosave_file(active_filename)
                         if latest_autosave:
                             print(colored(f"\n[System] Loading last autosave file: '{latest_autosave}'...", SYSTEM_COLOR))
-                            loaded_messages = load_chat_from_file(latest_autosave)
+                            loaded_messages, loaded_path = load_chat_from_file(latest_autosave)
                             if loaded_messages:
                                 messages = loaded_messages
-                                active_filename = latest_autosave # Set as active
+                                active_filename = loaded_path or latest_autosave
                                 print(colored(f"\n[System] Chat from '{latest_autosave}' loaded and is now the active file.", SYSTEM_COLOR))
-                                if len(messages) > 1:
-                                   print(colored(f"[System] Last message: \"{messages[-1]['content'][:50]}...\"", SYSTEM_COLOR))
-                                else:
-                                   print(colored(f"[System] Chat is empty or contains only a system prompt.", SYSTEM_COLOR))
+                                print_chat_history(messages)
                             else:
                                 # This case should ideally not happen if find_latest_autosave_file found a file
                                 # and load_chat_from_file failed, but good to have a fallback.
@@ -184,17 +221,13 @@ def main():
                         filename = command_parts[1]
                         if not filename.endswith('.chat'):
                             filename += '.chat'
-                        loaded_messages = load_chat_from_file(filename)
+                        loaded_messages, loaded_path = load_chat_from_file(filename)
                         if loaded_messages:
                             messages = loaded_messages
-                            # **CHANGE**: The loaded file is now the active file for autosaving.
-                            active_filename = filename
+                            active_filename = loaded_path or filename
                             print(colored(f"\n[System] Chat from '{filename}' loaded and is now the active file.", SYSTEM_COLOR))
                             # Display last message for context.
-                            if len(messages) > 1:
-                               print(colored(f"[System] Last message: \"{messages[-1]['content'][:50]}...\"", SYSTEM_COLOR))
-                            else:
-                               print(colored(f"[System] Chat is empty or contains only a system prompt.", SYSTEM_COLOR))
+                            print_chat_history(messages)
                     continue
 
                 elif command == "/system":
@@ -264,4 +297,7 @@ def main():
             break
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "sort":
+        sort_chats()
+    else:
+        main()
