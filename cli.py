@@ -162,6 +162,45 @@ def get_new_session_state():
     }
     return chat_data, autosave_filename
 
+
+def get_user_input(prompt="You (type an empty line to send):"):
+    """Collect multi-line user input terminated by an empty line."""
+    print(colored(f"\n{prompt}", USER_COLOR))
+    lines = []
+    while True:
+        line = input()
+        if not line:
+            break
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def generate_chat_name(client, messages):
+    """Use the model to generate a short descriptive name for the chat."""
+    convo = "\n".join(
+        f"{m['role']}: {m['content']}" for m in messages if m['role'] != 'system'
+    )
+    prompt_msgs = [
+        {
+            "role": "system",
+            "content": "Provide a short (max 5 words) name for this conversation.",
+        },
+        {"role": "user", "content": convo},
+    ]
+    try:
+        completion = client.chat.completions.create(
+            messages=prompt_msgs,
+            model=MODEL,
+            temperature=0.5,
+            top_p=1,
+            max_tokens=10,
+        )
+        name = completion.choices[0].message.content.strip().strip("\"")
+        return name
+    except Exception as e:
+        print(colored(f"\n[API Error] Could not generate chat name: {e}", ERROR_COLOR))
+        return None
+
 def save_chat_to_file(filename, chat_data):
     """Save chat data (metadata + messages) to a JSON file."""
     ensure_directories()
@@ -376,14 +415,7 @@ def main():
     while True:
         try:
             # --- MODIFIED INPUT FOR MULTI-LINE ---
-            print(colored("\nYou (type an empty line to send):", USER_COLOR))
-            user_input_lines = []
-            while True:
-                line = input()
-                if not line:
-                    break
-                user_input_lines.append(line)
-            user_input = "\n".join(user_input_lines).strip()
+            user_input = get_user_input()
 
             if not user_input:
                 continue
@@ -519,6 +551,9 @@ def main():
                         chat_data["messages"][0] = {"role": "system", "content": loaded}
                         print(colored(f"\n[System] System prompt set from '{name}'.", SYSTEM_COLOR))
                         save_chat_to_file(active_filename, chat_data)
+                        user_input = get_user_input("Enter your message (type an empty line to send):")
+                        if not user_input:
+                            continue
                     else:
                         print(colored("\n[Error] Unknown subcommand for /prompt.", ERROR_COLOR))
                         continue
@@ -572,6 +607,13 @@ def main():
                     messages.append({"role": "assistant", "content": assistant_response})
                     # Autosave to the active file after getting the assistant's response
                     save_chat_to_file(active_filename, chat_data)
+
+                    if len(messages) == 3 and chat_data["name"].startswith("Chat "):
+                        new_name = generate_chat_name(client, messages)
+                        if new_name:
+                            chat_data["name"] = new_name
+                            print(colored(f"[System] Chat renamed to '{new_name}'", SYSTEM_COLOR))
+                            save_chat_to_file(active_filename, chat_data)
 
             except Exception as e:
                 print(colored(f"\n[API Error] An error occurred: {e}", ERROR_COLOR))
