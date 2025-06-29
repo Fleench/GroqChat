@@ -7,6 +7,7 @@ Chat history is kept in the `chat_history/` folder with two subdirectories:
 * `userchat/` – chats you explicitly save with `/save`
 
 Run `python cli.py sort` to create these folders and organise any existing files.
+Run `python cli.py convert` to update old `.chat` files to version 1.0.
 
 ## Usage
 
@@ -42,10 +43,12 @@ Run `python cli.py sort` to create these folders and organise any existing files
 - `/chats` browse chat history starting with a list of subdirectories
 - `/prompt new <name>` create a reusable prompt
 - `/prompt use <name>` send a saved prompt as your message
+- `/prompt sys <name>` set the system prompt from a saved prompt
 - `/prompt list` list saved prompts
 - `/summary` generate a summary of the current conversation
 
 The chat interface automatically trims context to the most recent 10
 messages. The system prompt is always included when sending requests to
-the model.
+the model. Chat history files now store metadata such as the chat name,
+model and format version in addition to the message list.
 

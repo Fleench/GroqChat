@@ -13,6 +13,7 @@ from termcolor import colored
 # For example, in your terminal: export GROQ_API_KEY='your_api_key_here'
 API_KEY = os.environ.get("GROQ_API_KEY")
 MODEL = "llama3-70b-8192"
+CHAT_VERSION = "1.0"
 CHAT_HISTORY_DIR = "chat_history"
 AUTOSAVE_DIR = os.path.join(CHAT_HISTORY_DIR, "autosave")
 USERCHAT_DIR = os.path.join(CHAT_HISTORY_DIR, "userchat")
@@ -38,6 +39,47 @@ def sort_chats():
             target = os.path.join(USERCHAT_DIR, fname)
         shutil.move(path, target)
     print("Chats sorted into 'autosave' and 'userchat' directories.")
+
+def convert_chats():
+    """Convert legacy chat files to version 1.0 format."""
+    ensure_directories()
+    for root_dir, _, files in os.walk(CHAT_HISTORY_DIR):
+        for fname in files:
+            if not fname.endswith(".chat"):
+                continue
+            path = os.path.join(root_dir, fname)
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+            except Exception as e:
+                print(colored(f"[Error] Failed to read {path}: {e}", ERROR_COLOR))
+                continue
+
+            if isinstance(data, list):
+                chat_data = {
+                    "name": os.path.splitext(fname)[0],
+                    "version": CHAT_VERSION,
+                    "model": MODEL,
+                    "messages": data,
+                }
+            elif isinstance(data, dict):
+                if data.get("version") == CHAT_VERSION:
+                    continue  # Already converted
+                data.setdefault("name", os.path.splitext(fname)[0])
+                data.setdefault("model", MODEL)
+                data["version"] = CHAT_VERSION
+                chat_data = data
+            else:
+                print(colored(f"[Error] Unknown format in {path}", ERROR_COLOR))
+                continue
+
+            try:
+                with open(path, "w") as f:
+                    json.dump(chat_data, f, indent=2)
+                print(colored(f"Converted {path}", SYSTEM_COLOR))
+            except Exception as e:
+                print(colored(f"[Error] Failed to write {path}: {e}", ERROR_COLOR))
+
 
 # --- PROMPT MANAGEMENT ---
 
@@ -109,28 +151,33 @@ def setup_client():
     return Groq(api_key=API_KEY)
 
 def get_new_session_state():
-    """Returns a new chat session state with a default system prompt and a new autosave filename."""
+    """Return a new chat object and autosave filename."""
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     autosave_filename = os.path.join("autosave", f"autosave-{timestamp}.chat")
-    messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
-    return messages, autosave_filename
+    chat_data = {
+        "name": f"Chat {timestamp}",
+        "version": CHAT_VERSION,
+        "model": MODEL,
+        "messages": [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}],
+    }
+    return chat_data, autosave_filename
 
-def save_chat_to_file(filename, messages):
-    """Saves the chat history (a list of message dicts) to a JSON file."""
+def save_chat_to_file(filename, chat_data):
+    """Save chat data (metadata + messages) to a JSON file."""
     ensure_directories()
-    
+
     filepath = os.path.join(CHAT_HISTORY_DIR, filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     try:
-        with open(filepath, 'w') as f:
-            json.dump(messages, f, indent=2)
+        with open(filepath, "w") as f:
+            json.dump(chat_data, f, indent=2)
         return True, filepath
     except IOError as e:
         print(f"\n[Error] Could not save chat to {filepath}: {e}")
         return False, filepath
 
 def load_chat_from_file(filename):
-    """Loads chat history from a JSON file."""
+    """Load chat data from a JSON file."""
     ensure_directories()
     filepath = os.path.join(CHAT_HISTORY_DIR, filename)
     if not os.path.exists(filepath):
@@ -145,9 +192,24 @@ def load_chat_from_file(filename):
             return None, None
 
     try:
-        with open(filepath, 'r') as f:
-            messages = json.load(f)
-        return messages, os.path.relpath(filepath, CHAT_HISTORY_DIR)
+        with open(filepath, "r") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            chat_data = {
+                "name": os.path.splitext(os.path.basename(filepath))[0],
+                "version": "0",
+                "model": MODEL,
+                "messages": data,
+            }
+        elif isinstance(data, dict) and "messages" in data:
+            data.setdefault("name", os.path.splitext(os.path.basename(filepath))[0])
+            data.setdefault("model", MODEL)
+            data.setdefault("version", CHAT_VERSION)
+            chat_data = data
+        else:
+            print(colored(f"\n[Error] Invalid chat file format: {filepath}", ERROR_COLOR))
+            return None, None
+        return chat_data, os.path.relpath(filepath, CHAT_HISTORY_DIR)
     except (json.JSONDecodeError, IOError) as e:
         print(f"\n[Error] Could not read or parse file {filepath}: {e}")
         return None, None
@@ -165,6 +227,7 @@ def print_welcome_message():
     print("  /prompt new <name> - Create a custom user prompt.")
     print("  /prompt use <name> - Send a saved user prompt.")
     print("  /prompt list       - List saved prompts.")
+    print("  /prompt sys <name> - Set system prompt from a saved prompt.")
     print("  /summary       - Summarize the current chat.")
     print("  /help         - Show this help message.")
     print("  /exit         - Exit the application.")
@@ -268,16 +331,26 @@ def browse_chats():
     for fname in os.listdir(dir_path):
         if fname.endswith(".chat"):
             path = os.path.join(dir_path, fname)
-            chats.append((os.path.getmtime(path), os.path.relpath(path, CHAT_HISTORY_DIR)))
+            try:
+                with open(path, "r") as f:
+                    data = json.load(f)
+                name = data.get("name", os.path.splitext(fname)[0]) if isinstance(data, dict) else os.path.splitext(fname)[0]
+            except Exception:
+                name = os.path.splitext(fname)[0]
+            chats.append((os.path.getmtime(path), os.path.relpath(path, CHAT_HISTORY_DIR), name))
 
     if not chats:
         print(colored(f"\n[System] No chats found in '{selected_dir}'.", SYSTEM_COLOR))
         return None
 
     chats.sort(key=lambda x: x[0], reverse=True)
-    file_list = [c[1] for c in chats]
+    display = [f"{c[2]} ({c[1]})" for c in chats]
+    mapping = {f"{c[2]} ({c[1]})": c[1] for c in chats}
 
-    return pick_item(file_list)
+    selected = pick_item(display)
+    if selected:
+        return mapping[selected]
+    return None
 
 # --- COLOR DEFINITIONS ---
 USER_COLOR = "blue"
@@ -291,13 +364,14 @@ def main():
     """The main function to run the CLI chat application."""
     client = setup_client()
     ensure_directories()
-    messages, active_filename = get_new_session_state()
-    
+    chat_data, active_filename = get_new_session_state()
+    messages = chat_data["messages"]
+
     # Save the initial empty chat state for recovery
-    save_chat_to_file(active_filename, messages)
+    save_chat_to_file(active_filename, chat_data)
     
     print_welcome_message()
-    print(colored(f"[System] New chat started. Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'", SYSTEM_COLOR))
+    print(colored(f"[System] New chat started: {chat_data['name']}. Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'", SYSTEM_COLOR))
 
     while True:
         try:
@@ -320,9 +394,10 @@ def main():
                 command = command_parts[0]
 
                 if command == "/new":
-                    messages, active_filename = get_new_session_state()
-                    save_chat_to_file(active_filename, messages)
-                    print(colored("\n[System] New chat session started.", SYSTEM_COLOR))
+                    chat_data, active_filename = get_new_session_state()
+                    messages = chat_data["messages"]
+                    save_chat_to_file(active_filename, chat_data)
+                    print(colored(f"\n[System] New chat session started: {chat_data['name']}", SYSTEM_COLOR))
                     print(colored(f"[System] Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'", SYSTEM_COLOR))
                     continue
 
@@ -334,10 +409,10 @@ def main():
                     if not filename.endswith('.chat'):
                         filename += '.chat'
                     full_path = os.path.join('userchat', filename)
-                    success, path = save_chat_to_file(full_path, messages)
+                    success, path = save_chat_to_file(full_path, chat_data)
                     if success:
                         active_filename = full_path
-                        print(colored(f"\n[System] Chat saved. Active file is now '{path}'", SYSTEM_COLOR))
+                        print(colored(f"\n[System] Chat '{chat_data['name']}' saved to '{path}'", SYSTEM_COLOR))
                     continue
                 
                 elif command == "/load":
@@ -346,11 +421,12 @@ def main():
                         latest_autosave = find_latest_autosave_file(active_filename)
                         if latest_autosave:
                             print(colored(f"\n[System] Loading last autosave file: '{latest_autosave}'...", SYSTEM_COLOR))
-                            loaded_messages, loaded_path = load_chat_from_file(latest_autosave)
-                            if loaded_messages:
-                                messages = loaded_messages
+                            loaded_chat, loaded_path = load_chat_from_file(latest_autosave)
+                            if loaded_chat:
+                                chat_data = loaded_chat
+                                messages = chat_data["messages"]
                                 active_filename = loaded_path or latest_autosave
-                                print(colored(f"\n[System] Chat from '{latest_autosave}' loaded and is now the active file.", SYSTEM_COLOR))
+                                print(colored(f"\n[System] Chat '{chat_data['name']}' loaded.", SYSTEM_COLOR))
                                 print_chat_history(messages)
                             else:
                                 # This case should ideally not happen if find_latest_autosave_file found a file
@@ -363,32 +439,33 @@ def main():
                         filename = command_parts[1]
                         if not filename.endswith('.chat'):
                             filename += '.chat'
-                        loaded_messages, loaded_path = load_chat_from_file(filename)
-                        if loaded_messages:
-                            messages = loaded_messages
+                        loaded_chat, loaded_path = load_chat_from_file(filename)
+                        if loaded_chat:
+                            chat_data = loaded_chat
+                            messages = chat_data["messages"]
                             active_filename = loaded_path or filename
-                            print(colored(f"\n[System] Chat from '{filename}' loaded and is now the active file.", SYSTEM_COLOR))
-                            # Display last message for context.
+                            print(colored(f"\n[System] Chat '{chat_data['name']}' loaded.", SYSTEM_COLOR))
                             print_chat_history(messages)
                     continue
 
                 elif command == "/chats":
                     selected = browse_chats()
                     if selected:
-                        loaded_messages, loaded_path = load_chat_from_file(selected)
-                        if loaded_messages:
-                            messages = loaded_messages
+                        loaded_chat, loaded_path = load_chat_from_file(selected)
+                        if loaded_chat:
+                            chat_data = loaded_chat
+                            messages = chat_data["messages"]
                             active_filename = loaded_path or selected
-                            print(colored(f"\n[System] Chat from '{selected}' loaded and is now the active file.", SYSTEM_COLOR))
+                            print(colored(f"\n[System] Chat '{chat_data['name']}' loaded.", SYSTEM_COLOR))
                             print_chat_history(messages)
                     continue
 
                 elif command == "/system":
                     new_prompt = input(colored("Enter new system prompt: ", SYSTEM_COLOR)).strip()
                     if new_prompt:
-                        messages[0] = {"role": "system", "content": new_prompt}
+                        chat_data["messages"][0] = {"role": "system", "content": new_prompt}
                         print(colored("\n[System] System prompt updated.", SYSTEM_COLOR))
-                        save_chat_to_file(active_filename, messages)
+                        save_chat_to_file(active_filename, chat_data)
                     else:
                         print(colored("\n[System] System prompt not changed (input was empty).", SYSTEM_COLOR))
                     continue
@@ -430,6 +507,18 @@ def main():
                         print(colored(f"\n[System] Using prompt '{name}':", SYSTEM_COLOR))
                         print(colored(loaded, USER_COLOR))
                         user_input = loaded
+                    elif action in ("sys", "system"):
+                        if len(command_parts) < 3:
+                            print(colored("\n[Error] Usage: /prompt sys <name>", ERROR_COLOR))
+                            continue
+                        name = command_parts[2]
+                        loaded = load_prompt(name)
+                        if loaded is None:
+                            print(colored(f"\n[Error] Prompt '{name}' not found.", ERROR_COLOR))
+                            continue
+                        chat_data["messages"][0] = {"role": "system", "content": loaded}
+                        print(colored(f"\n[System] System prompt set from '{name}'.", SYSTEM_COLOR))
+                        save_chat_to_file(active_filename, chat_data)
                     else:
                         print(colored("\n[Error] Unknown subcommand for /prompt.", ERROR_COLOR))
                         continue
@@ -454,7 +543,7 @@ def main():
             messages.append({"role": "user", "content": user_input})
             
             # Autosave to the currently active file before the API call
-            save_chat_to_file(active_filename, messages)
+            save_chat_to_file(active_filename, chat_data)
 
             print(colored("\nAssistant: ", ASSISTANT_COLOR), end="", flush=True)
             
@@ -482,7 +571,7 @@ def main():
                 if assistant_response:
                     messages.append({"role": "assistant", "content": assistant_response})
                     # Autosave to the active file after getting the assistant's response
-                    save_chat_to_file(active_filename, messages)
+                    save_chat_to_file(active_filename, chat_data)
 
             except Exception as e:
                 print(colored(f"\n[API Error] An error occurred: {e}", ERROR_COLOR))
@@ -499,7 +588,12 @@ def main():
             break
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "sort":
-        sort_chats()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "sort":
+            sort_chats()
+        elif sys.argv[1] == "convert":
+            convert_chats()
+        else:
+            main()
     else:
         main()
