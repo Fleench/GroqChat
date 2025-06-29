@@ -44,6 +44,4 @@ Run `python cli.py sort` to create these folders and organise any existing files
 - `/prompt use <name>` send a saved prompt as your message
 - `/prompt list` list saved prompts
 - `/summary` generate a summary of the current conversation
-  Summaries are written from a neutral observer perspective and include key details.
-  Only the last 50 messages are used to avoid exceeding model limits.
 
