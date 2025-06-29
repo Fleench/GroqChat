@@ -139,51 +139,63 @@ def find_latest_autosave_file(current_active_filename):
     return os.path.join("autosave", autosave_files[0])
 
 def browse_chats():
-    """Interactive file browser for chat history."""
+    """Interactive browser to pick a chat file."""
     ensure_directories()
 
+    subdirs = [d for d in os.listdir(CHAT_HISTORY_DIR) if os.path.isdir(os.path.join(CHAT_HISTORY_DIR, d))]
+    if not subdirs:
+        print(colored("\n[System] No chat directories found.", SYSTEM_COLOR))
+        return None
+
+    import curses
+
+    def pick_item(items):
+        def ui(stdscr):
+            curses.curs_set(0)
+            idx = 0
+            while True:
+                stdscr.clear()
+                h, w = stdscr.getmaxyx()
+                for i, it in enumerate(items):
+                    prefix = "-> " if i == idx else "   "
+                    if i < h - 2:
+                        stdscr.addstr(i, 0, (prefix + it)[: w - 1])
+                stdscr.addstr(h - 1, 0, "Use arrows, Enter to open, Esc to cancel")
+                key = stdscr.getch()
+                if key == curses.KEY_UP:
+                    idx = (idx - 1) % len(items)
+                elif key == curses.KEY_DOWN:
+                    idx = (idx + 1) % len(items)
+                elif key in (10, 13):
+                    return items[idx]
+                elif key == 27:  # ESC
+                    return None
+
+        try:
+            return curses.wrapper(ui)
+        except Exception as e:
+            print(colored(f"\n[Error] Unable to open browser: {e}", ERROR_COLOR))
+            return None
+
+    selected_dir = pick_item(subdirs)
+    if not selected_dir:
+        return None
+
+    dir_path = os.path.join(CHAT_HISTORY_DIR, selected_dir)
     chats = []
-    for directory in [AUTOSAVE_DIR, USERCHAT_DIR]:
-        for fname in os.listdir(directory):
-            if fname.endswith(".chat"):
-                path = os.path.join(directory, fname)
-                chats.append((os.path.getmtime(path), os.path.relpath(path, CHAT_HISTORY_DIR)))
+    for fname in os.listdir(dir_path):
+        if fname.endswith(".chat"):
+            path = os.path.join(dir_path, fname)
+            chats.append((os.path.getmtime(path), os.path.relpath(path, CHAT_HISTORY_DIR)))
 
     if not chats:
-        print(colored("\n[System] No chats found.", SYSTEM_COLOR))
+        print(colored(f"\n[System] No chats found in '{selected_dir}'.", SYSTEM_COLOR))
         return None
 
     chats.sort(key=lambda x: x[0], reverse=True)
     file_list = [c[1] for c in chats]
 
-    import curses
-
-    def ui(stdscr):
-        curses.curs_set(0)
-        idx = 0
-        while True:
-            stdscr.clear()
-            h, w = stdscr.getmaxyx()
-            for i, fname in enumerate(file_list):
-                prefix = "-> " if i == idx else "   "
-                if i < h - 2:
-                    stdscr.addstr(i, 0, (prefix + fname)[: w - 1])
-            stdscr.addstr(h - 1, 0, "Use arrows, Enter to open, Esc to cancel")
-            key = stdscr.getch()
-            if key == curses.KEY_UP:
-                idx = (idx - 1) % len(file_list)
-            elif key == curses.KEY_DOWN:
-                idx = (idx + 1) % len(file_list)
-            elif key in (10, 13):
-                return file_list[idx]
-            elif key == 27:  # ESC
-                return None
-
-    try:
-        return curses.wrapper(ui)
-    except Exception as e:
-        print(colored(f"\n[Error] Unable to open browser: {e}", ERROR_COLOR))
-        return None
+    return pick_item(file_list)
 
 # --- COLOR DEFINITIONS ---
 USER_COLOR = "blue"
