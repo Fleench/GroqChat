@@ -14,10 +14,10 @@ GroqChat is a minimal command-line chat interface for Groq's language model. The
 
 2. **Install dependencies**
 
-   This project requires `groq` and `termcolor`. Install them with pip:
+   Install the required packages using `requirements.txt`:
 
    ```bash
-   pip install groq termcolor
+   pip install -r requirements.txt
    ```
 
 3. **Run the chat CLI**
