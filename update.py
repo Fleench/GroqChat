@@ -2,7 +2,7 @@ import requests
 import os
 
 # Set the GitHub repository URL
-GITHUB_REPO_URL = "https://raw.githubusercontent.com/your-username/your-repo-name/main/"
+GITHUB_REPO_URL = "https://raw.githubusercontent.com/Fleench/GroqChat/main/"
 
 # Set the local file paths
 LOCAL_FILE_PATHS = [
