@@ -5,6 +5,10 @@ from datetime import datetime
 import shutil
 from groq import Groq
 from termcolor import colored
+from rich.console import Console
+from rich.markdown import Markdown
+
+console = Console()
 
 # --- CONFIGURATION ---
 
@@ -18,11 +22,18 @@ CHAT_HISTORY_DIR = "chat_history"
 AUTOSAVE_DIR = os.path.join(CHAT_HISTORY_DIR, "autosave")
 USERCHAT_DIR = os.path.join(CHAT_HISTORY_DIR, "userchat")
 PROMPTS_DIR = "prompts"
+EXPORTS_DIR = "exports"
+AVAILABLE_MODELS = [
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "mixtral-8x7b",
+]
 
 def ensure_directories():
     """Ensure chat history directories exist."""
     os.makedirs(AUTOSAVE_DIR, exist_ok=True)
     os.makedirs(USERCHAT_DIR, exist_ok=True)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
 
 def sort_chats():
     """Move chat files into autosave or userchat directories based on filename."""
@@ -268,6 +279,11 @@ def print_welcome_message():
     print("  /prompt list       - List saved prompts.")
     print("  /prompt sys <name> - Set system prompt from a saved prompt.")
     print("  /summary       - Summarize the current chat.")
+    print("  /search <term> - Search messages in the current chat.")
+    print("  /export <name> - Export chat as Markdown or text.")
+    print("  /model <name>  - Change the model in use.")
+    print("  /model select  - Choose a model from a list.")
+    print("  /info          - Display chat info.")
     print("  /help         - Show this help message.")
     print("  /exit         - Exit the application.")
     print("-" * 21)
@@ -277,7 +293,8 @@ def print_chat_history(messages):
     for msg in messages[1:]:
         role = msg["role"].capitalize()
         color = USER_COLOR if msg['role'] == 'user' else ASSISTANT_COLOR if msg['role'] == 'assistant' else SYSTEM_COLOR
-        print(colored(f"{role}: {msg['content']}", color))
+        console.print(f"[{color}]{role}:[/{color}]")
+        console.print(Markdown(msg['content']))
 
 def summarize_chat(client, messages):
     """Generate a detailed summary of the recent conversation without modifying it."""
@@ -302,6 +319,34 @@ def summarize_chat(client, messages):
         print(colored(f"\n[Summary]\n{summary}\n", ASSISTANT_COLOR))
     except Exception as e:
         print(colored(f"\n[API Error] Could not generate summary: {e}", ERROR_COLOR))
+
+def search_messages(messages, term):
+    """Return list of message strings containing term."""
+    term = term.lower()
+    results = []
+    for i, m in enumerate(messages[1:], start=1):
+        if term in m["content"].lower():
+            results.append(f"{i}: {m['role']} - {m['content']}")
+    return results
+
+def export_chat(chat_data, name):
+    """Export the current chat to EXPORTS_DIR."""
+    ensure_directories()
+    if not name:
+        name = chat_data["name"].replace(" ", "_") + ".txt"
+    path = os.path.join(EXPORTS_DIR, name)
+    if name.endswith('.md'):
+        with open(path, 'w') as f:
+            f.write(f"# {chat_data['name']}\n\n")
+            for m in chat_data['messages']:
+                f.write(f"**{m['role']}**: {m['content']}\n\n")
+    else:
+        if not name.endswith('.txt'):
+            path += '.txt'
+        with open(path, 'w') as f:
+            for m in chat_data['messages']:
+                f.write(f"{m['role'].capitalize()}: {m['content']}\n\n")
+    return path
 
 def find_latest_autosave_file(current_active_filename):
     """Finds the most recent 'autosave-*.chat' file, excluding the current_active_filename."""
@@ -391,6 +436,36 @@ def browse_chats():
         return mapping[selected]
     return None
 
+def select_model_ui():
+    """Simple curses-based model selector."""
+    import curses
+
+    def pick(items):
+        def ui(stdscr):
+            curses.curs_set(0)
+            idx = 0
+            while True:
+                stdscr.clear()
+                h, w = stdscr.getmaxyx()
+                for i, m in enumerate(items):
+                    prefix = "-> " if i == idx else "   "
+                    stdscr.addstr(i, 0, (prefix + m)[: w - 1])
+                key = stdscr.getch()
+                if key == curses.KEY_UP:
+                    idx = (idx - 1) % len(items)
+                elif key == curses.KEY_DOWN:
+                    idx = (idx + 1) % len(items)
+                elif key in (10, 13):
+                    return items[idx]
+                elif key == 27:
+                    return None
+        try:
+            return curses.wrapper(ui)
+        except Exception:
+            return None
+
+    return pick(AVAILABLE_MODELS)
+
 # --- COLOR DEFINITIONS ---
 USER_COLOR = "blue"
 ASSISTANT_COLOR = "green"
@@ -401,6 +476,7 @@ ERROR_COLOR = "red"
 
 def main():
     """The main function to run the CLI chat application."""
+    global MODEL
     client = setup_client()
     ensure_directories()
     chat_data, active_filename = get_new_session_state()
@@ -562,6 +638,55 @@ def main():
                     summarize_chat(client, messages)
                     continue
 
+                elif command == "/search":
+                    if len(command_parts) < 2:
+                        print(colored("\n[Error] Usage: /search <term>", ERROR_COLOR))
+                        continue
+                    term = " ".join(command_parts[1:])
+                    results = search_messages(messages, term)
+                    if results:
+                        print(colored("\n[Search Results]", SYSTEM_COLOR))
+                        for r in results:
+                            console.print(Markdown(r))
+                    else:
+                        print(colored("\n[System] No matches found.", SYSTEM_COLOR))
+                    continue
+
+                elif command == "/export":
+                    name = command_parts[1] if len(command_parts) > 1 else ""
+                    path = export_chat(chat_data, name)
+                    print(colored(f"\n[System] Exported to '{path}'", SYSTEM_COLOR))
+                    continue
+
+                elif command == "/model":
+                    if len(command_parts) == 1:
+                        print(colored(f"\n[System] Current model: {MODEL}", SYSTEM_COLOR))
+                        continue
+                    if command_parts[1] == "select":
+                        choice = select_model_ui()
+                        if choice:
+                            MODEL = choice
+                            chat_data["model"] = choice
+                            print(colored(f"\n[System] Model set to {choice}", SYSTEM_COLOR))
+                        continue
+                    MODEL = command_parts[1]
+                    chat_data["model"] = MODEL
+                    print(colored(f"\n[System] Model set to {MODEL}", SYSTEM_COLOR))
+                    continue
+
+                elif command == "/info":
+                    path = os.path.join(CHAT_HISTORY_DIR, active_filename)
+                    try:
+                        mtime = datetime.fromtimestamp(os.path.getmtime(path)).isoformat()
+                    except Exception:
+                        mtime = "unknown"
+                    print(colored("", SYSTEM_COLOR))
+                    print(colored(f"File: {active_filename}", SYSTEM_COLOR))
+                    print(colored(f"Model: {chat_data['model']}", SYSTEM_COLOR))
+                    print(colored(f"Messages: {len(messages)-1}", SYSTEM_COLOR))
+                    print(colored(f"Last saved: {mtime}", SYSTEM_COLOR))
+                    continue
+
                 elif command == "/help":
                     print_welcome_message()
                     continue
@@ -580,8 +705,8 @@ def main():
             # Autosave to the currently active file before the API call
             save_chat_to_file(active_filename, chat_data)
 
-            print(colored("\nAssistant: ", ASSISTANT_COLOR), end="", flush=True)
-            
+            console.print(f"[{ASSISTANT_COLOR}]Assistant:[/{ASSISTANT_COLOR}]")
+
             try:
                 context_messages = messages[-HISTORY_LIMIT:]
                 if context_messages[0]["role"] != "system":
@@ -592,16 +717,10 @@ def main():
                     model=MODEL,
                     temperature=0.7,
                     top_p=1,
-                    stream=True,
                 )
 
-                assistant_response = ""
-                for chunk in chat_completion:
-                    content = chunk.choices[0].delta.content or ""
-                    assistant_response += content
-                    print(colored(content, ASSISTANT_COLOR), end="", flush=True)
-
-                print() # Final newline after streaming is complete
+                assistant_response = chat_completion.choices[0].message.content
+                console.print(Markdown(assistant_response), style=ASSISTANT_COLOR)
 
                 if assistant_response:
                     messages.append({"role": "assistant", "content": assistant_response})
