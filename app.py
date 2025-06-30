@@ -58,7 +58,19 @@ def list_chats():
     for d in os.listdir(cli.CHAT_HISTORY_DIR):
         path = os.path.join(cli.CHAT_HISTORY_DIR, d)
         if os.path.isdir(path):
-            data[d] = [f for f in os.listdir(path) if f.endswith('.chat')]
+            chats = []
+            for fname in os.listdir(path):
+                if not fname.endswith('.chat'):
+                    continue
+                fpath = os.path.join(path, fname)
+                try:
+                    with open(fpath, 'r') as f:
+                        j = json.load(f)
+                    name = j.get('name', os.path.splitext(fname)[0]) if isinstance(j, dict) else os.path.splitext(fname)[0]
+                except Exception:
+                    name = os.path.splitext(fname)[0]
+                chats.append({'file': fname, 'name': name})
+            data[d] = chats
     return data
 
 
@@ -228,60 +240,108 @@ INDEX_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset='utf-8'>
-<title>GroqChat Web</title>
-<style>
-body{font-family:Arial,Helvetica,sans-serif;margin:0;display:flex;height:100vh}
-#sidebar{width:250px;border-right:1px solid #ccc;overflow-y:auto;padding:10px}
-#chat{flex:1;display:flex;flex-direction:column;height:100%}
-#messages{flex:1;overflow-y:auto;padding:10px}
-#input{display:flex;border-top:1px solid #ccc}
-#input textarea{flex:1;padding:5px}
-</style>
+  <meta charset='utf-8'>
+  <title>GroqChat Web</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:0;display:flex;height:100vh;background:#1e1e1e;color:#eee}
+    #sidebar{width:250px;border-right:1px solid #444;overflow-y:auto;padding:10px;background:#2b2b2b;display:flex;flex-direction:column}
+    #tabButtons{display:flex;margin-bottom:10px}
+    .tab{flex:1;padding:5px;background:#333;border:1px solid #444;color:#eee;cursor:pointer;text-align:center}
+    .tab.active{background:#555}
+    #fileList{display:flex;flex-direction:column;gap:6px}
+    .chat-entry{cursor:pointer;color:#9cf;padding:2px}
+    .chat-entry:hover{background:#3a3a3a}
+    .chat-name{font-size:14px}
+    .chat-file{font-size:12px;color:#aaa;margin-left:4px}
+    #chat{flex:1;display:flex;flex-direction:column;height:100%}
+    #messages{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+    .message{padding:8px;border-radius:4px;max-width:80%}
+    .user{background:#2f3b55;align-self:flex-end}
+    .assistant{background:#353535}
+    #input{display:flex;border-top:1px solid #444}
+    #input textarea{flex:1;padding:5px;background:#333;color:#eee;border:1px solid #444}
+    #input button{background:#444;color:#eee;border:1px solid #555;padding:5px 10px}
+  </style>
 </head>
 <body>
-<div id='sidebar'>
-<h3>Chats</h3>
-<div id='tabs'></div>
-</div>
-<div id='chat'>
-<div id='messages'></div>
-<div id='input'>
-<textarea id='msg' rows='3'></textarea>
-<button onclick='sendMsg()'>Send</button>
-</div>
-</div>
-<script>
-async function loadChats(){
-  const res=await fetch('/api/chats');
-  const data=await res.json();
-  const tabs=document.getElementById('tabs');
-  tabs.innerHTML='';
-  for(const dir in data){
-    const h=document.createElement('h4');h.textContent=dir;tabs.appendChild(h);
-    data[dir].forEach(f=>{
-      const a=document.createElement('a');a.href='#';a.textContent=f;a.onclick=()=>loadChat(f);tabs.appendChild(a);tabs.appendChild(document.createElement('br'));});}
-}
-async function loadChat(name){
-  const res=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
-  const data=await res.json();
-  showMessages(data.chat.messages);
-}
-async function sendMsg(){
-  const t=document.getElementById('msg');
-  const text=t.value;t.value='';
-  const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
-  const data=await res.json();
-  showMessages(data.chat.messages);
-}
-function showMessages(msgs){
-  const div=document.getElementById('messages');div.innerHTML='';
-  msgs.forEach(m=>{const p=document.createElement('p');p.textContent=m.role.toUpperCase()+': '+m.content;div.appendChild(p);});
+  <div id='sidebar'>
+    <h3>Chats</h3>
+    <div id='tabButtons'></div>
+    <div id='fileList'></div>
+  </div>
+  <div id='chat'>
+    <div id='messages'></div>
+    <div id='input'>
+      <textarea id='msg' rows='3'></textarea>
+      <button onclick='sendMsg()'>Send</button>
+    </div>
+  </div>
+  <script>
+  let chatData={};
+  let currentTab='';
+  async function loadChats(){
+    const res=await fetch('/api/chats');
+    chatData=await res.json();
+    const keys=Object.keys(chatData);
+    if(!currentTab) currentTab=keys[0]||'';
+    renderTabs();
+    renderFiles();
+  }
+  function renderTabs(){
+    const tabs=document.getElementById('tabButtons');
+    tabs.innerHTML='';
+    for(const dir in chatData){
+      const b=document.createElement('div');
+      b.className='tab'+(dir===currentTab?' active':'');
+      b.textContent=dir;
+      b.onclick=()=>{currentTab=dir;renderTabs();renderFiles();};
+      tabs.appendChild(b);
+    }
+  }
+  function renderFiles(){
+    const list=document.getElementById('fileList');
+    list.innerHTML='';
+    if(!currentTab) return;
+    chatData[currentTab].forEach(item=>{
+      const div=document.createElement('div');
+      div.className='chat-entry';
+      div.onclick=()=>loadChat(item.file);
+      const n=document.createElement('div');
+      n.className='chat-name';
+      n.textContent=item.name;
+      const f=document.createElement('div');
+      f.className='chat-file';
+      f.textContent=item.file;
+      div.appendChild(n);
+      div.appendChild(f);
+      list.appendChild(div);
+    });
+  }
+  async function loadChat(name){
+    const res=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
+    const data=await res.json();
+    showMessages(data.chat.messages);
+  }
+  async function sendMsg(){
+    const t=document.getElementById('msg');
+    const text=t.value;t.value='';
+    const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+    const data=await res.json();
+    showMessages(data.chat.messages);
+  }
+  function showMessages(msgs){
+    const div=document.getElementById('messages');div.innerHTML='';
+    msgs.forEach(m=>{
+      const p=document.createElement('div');
+      p.className='message '+(m.role==='user'?'user':'assistant');
+      p.textContent=m.content;
+      div.appendChild(p);
+    });
+    loadChats();
+  }
   loadChats();
-}
-loadChats();
-fetch('/api/chat').then(r=>r.json()).then(d=>showMessages(d.messages));
-</script>
+  fetch('/api/chat').then(r=>r.json()).then(d=>showMessages(d.messages));
+  </script>
 </body>
 </html>
 """
