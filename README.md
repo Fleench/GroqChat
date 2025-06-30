@@ -1,6 +1,6 @@
 # GroqChat
 
-GroqChat is a minimal command-line chat interface for Groq's language model. The script stores chat history locally so you can resume conversations at any time.
+GroqChat is a minimal command-line chat interface for Groq's language model. The script stores chat history locally so you can resume conversations at any time. Messages are shown with Markdown formatting, and you can switch models on the fly.
 
 Chat history is kept in the `chat_history/` folder with two subdirectories:
 * `autosave/`  – files automatically created while chatting
@@ -47,6 +47,11 @@ Run `python cli.py convert` to update old `.chat` files to version 1.0.
   (you will be prompted for a message afterwards)
 - `/prompt list` list saved prompts
 - `/summary` generate a summary of the current conversation
+- `/search <term>` find messages containing a term in the current chat
+- `/export <name>` save the chat as Markdown or text
+- `/model <name>` switch to a different model
+- `/model select` open a UI to choose a model
+- `/info` display the active filename, model and message count
 
 The chat interface automatically trims context to the most recent 10
 messages. The system prompt is always included when sending requests to
