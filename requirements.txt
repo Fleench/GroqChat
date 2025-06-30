@@ -6,3 +6,6 @@ rich
 fastapi
 uvicorn
 
+#update requirements
+requests
+
