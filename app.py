@@ -110,15 +110,26 @@ def handle_command(user_input):
         return {"error": f"File {name} not found"}
     elif cmd == '/chats':
         return {"chats": list_chats()}
+    elif cmd == '/system':
+        if len(parts) < 2:
+            return {"error": "Usage: /system <prompt>"}
+        new_prompt = " ".join(parts[1:])
+        chat_data['messages'][0] = {"role": "system", "content": new_prompt}
+        cli.save_chat_to_file(active_filename, chat_data)
+        return {"system": "System prompt updated"}
     elif cmd == '/prompt':
         if len(parts) < 2:
             return {"error": "Usage: /prompt <new|use|list|sys>"}
         action = parts[1]
         if action == 'new':
-            if len(parts) < 3:
-                return {"error": "Usage: /prompt new <name>"}
+            if len(parts) < 4:
+                return {"error": "Usage: /prompt new <name> <text>"}
             name = parts[2]
-            return {"error": "Use /prompt new via CLI"}
+            text = " ".join(parts[3:])
+            success, path = cli.save_prompt(name, text)
+            if success:
+                return {"system": f"Prompt '{name}' saved to {path}"}
+            return {"error": f"Could not save prompt {name}"}
         elif action == 'list':
             names = cli.list_prompts()
             return {"prompts": names}
@@ -155,7 +166,7 @@ def handle_command(user_input):
             return {"error": "Unknown prompt command"}
     elif cmd == '/summary':
         s = summarize(messages)
-        return {"assistant": s}
+        return {"summary": s}
     elif cmd == '/search':
         if len(parts) < 2:
             return {"error": "Usage: /search <term>"}
@@ -168,6 +179,8 @@ def handle_command(user_input):
     elif cmd == '/model':
         if len(parts) == 1:
             return {"system": f"Current model: {MODEL}"}
+        if parts[1] == 'select':
+            return {"models": cli.AVAILABLE_MODELS}
         MODEL = parts[1]
         chat_data['model'] = MODEL
         return {"system": f"Model set to {MODEL}"}
@@ -255,9 +268,14 @@ INDEX_HTML = """
     .chat-file{font-size:12px;color:#aaa;margin-left:4px}
     #chat{flex:1;display:flex;flex-direction:column;height:100%}
     #messages{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
-    .message{padding:8px;border-radius:4px;max-width:80%}
+    .message{padding:8px;border-radius:4px;max-width:80%;white-space:pre-wrap}
     .user{background:#2f3b55;align-self:flex-end}
     .assistant{background:#353535}
+    .system{background:#444;align-self:center}
+    .error{background:#552222;color:#ffbbbb;align-self:center}
+    #sysBox{margin-top:10px}
+    #sysPrompt{width:100%;background:#333;color:#eee;border:1px solid #555;margin-top:4px}
+    #summaryBox{margin-top:10px;font-size:12px;white-space:pre-wrap}
     #input{display:flex;border-top:1px solid #444}
     #input textarea{flex:1;padding:5px;background:#333;color:#eee;border:1px solid #444}
     #input button{background:#444;color:#eee;border:1px solid #555;padding:5px 10px}
@@ -268,6 +286,12 @@ INDEX_HTML = """
     <h3>Chats</h3>
     <div id='tabButtons'></div>
     <div id='fileList'></div>
+    <details id='sysBox'>
+      <summary>System Prompt</summary>
+      <textarea id='sysPrompt' rows='4'></textarea>
+      <button onclick='updateSystem()'>Save</button>
+    </details>
+    <div id='summaryBox'></div>
   </div>
   <div id='chat'>
     <div id='messages'></div>
@@ -279,6 +303,16 @@ INDEX_HTML = """
   <script>
   let chatData={};
   let currentTab='';
+  function md(t){
+    let h=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+    h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
+    h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
+    return h.replace(/\n/g,'<br>');
+  }
+  function setSystem(text){
+    document.getElementById('sysPrompt').value=text||'';
+  }
   async function loadChats(){
     const res=await fetch('/api/chats');
     chatData=await res.json();
@@ -320,23 +354,78 @@ INDEX_HTML = """
   async function loadChat(name){
     const res=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
     const data=await res.json();
-    showMessages(data.chat.messages);
+    showMessages(data.chat.messages,data.result);
+  }
+  async function updateSystem(){
+    const text=document.getElementById('sysPrompt').value;
+    const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'/system '+text})});
+    const data=await res.json();
+    showMessages(data.chat.messages,data.result);
   }
   async function sendMsg(){
     const t=document.getElementById('msg');
     const text=t.value;t.value='';
     const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
     const data=await res.json();
-    showMessages(data.chat.messages);
+    showMessages(data.chat.messages,data.result);
   }
-  function showMessages(msgs){
-    const div=document.getElementById('messages');div.innerHTML='';
-    msgs.forEach(m=>{
+  function showMessages(msgs,res){
+    const div=document.getElementById('messages');
+    div.innerHTML='';
+    if(msgs[0]&&msgs[0].role==='system') setSystem(msgs[0].content);
+    msgs.slice(1).forEach(m=>{
       const p=document.createElement('div');
       p.className='message '+(m.role==='user'?'user':'assistant');
-      p.textContent=m.content;
+      p.innerHTML=md(m.content);
       div.appendChild(p);
     });
+    if(res){
+      if(res.system){
+        const p=document.createElement('div');
+        p.className='message system';
+        p.innerHTML=md(res.system);
+        div.appendChild(p);
+      }
+      if(res.error){
+        const p=document.createElement('div');
+        p.className='message error';
+        p.textContent=res.error;
+        div.appendChild(p);
+      }
+      if(res.assistant){
+        const p=document.createElement('div');
+        p.className='message assistant';
+        p.innerHTML=md(res.assistant);
+        div.appendChild(p);
+      }
+      if(res.prompts){
+        const p=document.createElement('div');
+        p.className='message system';
+        p.textContent='Prompts: '+res.prompts.join(', ');
+        div.appendChild(p);
+      }
+      if(res.results){
+        const p=document.createElement('div');
+        p.className='message system';
+        p.innerHTML=md(res.results.join('\n'));
+        div.appendChild(p);
+      }
+      if(res.models){
+        const p=document.createElement('div');
+        p.className='message system';
+        p.textContent='Models: '+res.models.join(', ');
+        div.appendChild(p);
+      }
+      if(res.file){
+        const p=document.createElement('div');
+        p.className='message system';
+        p.textContent=`File: ${res.file} | Model: ${res.model} | Messages: ${res.messages}`;
+        div.appendChild(p);
+      }
+      if(res.summary){
+        document.getElementById('summaryBox').textContent=res.summary;
+      }
+    }
     loadChats();
   }
   loadChats();
