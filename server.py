@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import os
 import json
 
@@ -14,6 +15,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 cli.ensure_directories()
 client = cli.setup_client()
@@ -256,208 +258,13 @@ async def api_message(data: dict):
     return {"result": res, "chat": get_chat_state()}
 
 
-INDEX_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset='utf-8'>
-  <title>GroqChat Web</title>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;margin:0;display:flex;height:100vh;background:#1e1e1e;color:#eee}
-    #sidebar{width:250px;border-right:1px solid #444;overflow-y:auto;padding:10px;background:#2b2b2b;display:flex;flex-direction:column}
-    #tabButtons{display:flex;margin-bottom:10px}
-    .tab{flex:1;padding:5px;background:#333;border:1px solid #444;color:#eee;cursor:pointer;text-align:center}
-    .tab.active{background:#555}
-    #fileList{display:flex;flex-direction:column;gap:6px}
-    .chat-entry{cursor:pointer;color:#9cf;padding:2px}
-    .chat-entry:hover{background:#3a3a3a}
-    .chat-name{font-size:14px}
-    .chat-file{font-size:12px;color:#aaa;margin-left:4px}
-    #chat{flex:1;display:flex;flex-direction:column;height:100%}
-    #chatHeader{padding:10px;border-bottom:1px solid #444}
-    #chatName{font-size:18px;margin-bottom:2px}
-    #chatPath{font-size:12px;color:#aaa}
-    #summaryBox{margin-top:8px;font-size:12px;white-space:pre-wrap}
-    #messages{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
-    .message{padding:8px;border-radius:4px;max-width:80%;white-space:pre-wrap}
-    .user{background:#2f3b55;align-self:flex-end}
-    .assistant{background:#353535}
-    .system{background:#444;align-self:center}
-    .error{background:#552222;color:#ffbbbb;align-self:center}
-    #sysBox{margin-top:10px}
-    #sysPrompt{width:100%;background:#333;color:#eee;border:1px solid #555;margin-top:4px}
-    #input{display:flex;border-top:1px solid #444}
-    #input textarea{flex:1;padding:5px;background:#333;color:#eee;border:1px solid #444}
-    #input button{background:#444;color:#eee;border:1px solid #555;padding:5px 10px}
-  </style>
-</head>
-<body>
-  <div id='sidebar'>
-    <h3>Chats</h3>
-    <div id='tabButtons'></div>
-    <div id='fileList'></div>
-  </div>
-  <div id='chat'>
-    <div id='chatHeader'>
-      <div id='chatName'></div>
-      <div id='chatPath'></div>
-      <div id='summaryBox'></div>
-      <details id='sysBox'>
-        <summary>System Prompt</summary>
-        <textarea id='sysPrompt' rows='4'></textarea>
-        <button onclick='updateSystem()'>Save</button>
-      </details>
-    </div>
-    <div id='messages'></div>
-    <div id='input'>
-      <textarea id='msg' rows='3'></textarea>
-      <button onclick='sendMsg()'>Send</button>
-    </div>
-  </div>
-  <script>
-  let chatData={};
-  let currentTab='';
-  function md(t){
-    let h=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-    h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
-    h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
-    return h.replace(/\n/g,'<br>');
-  }
-  function setSystem(text){
-    document.getElementById('sysPrompt').value=text||'';
-  }
-  async function loadChats(){
-    const res=await fetch('/api/chats');
-    chatData=await res.json();
-    const keys=Object.keys(chatData);
-    if(!currentTab) currentTab=keys[0]||'';
-    renderTabs();
-    renderFiles();
-  }
-  function renderTabs(){
-    const tabs=document.getElementById('tabButtons');
-    tabs.innerHTML='';
-    for(const dir in chatData){
-      const b=document.createElement('div');
-      b.className='tab'+(dir===currentTab?' active':'');
-      b.textContent=dir;
-      b.onclick=()=>{currentTab=dir;renderTabs();renderFiles();};
-      tabs.appendChild(b);
-    }
-  }
-  function renderFiles(){
-    const list=document.getElementById('fileList');
-    list.innerHTML='';
-    if(!currentTab) return;
-    chatData[currentTab].forEach(item=>{
-      const div=document.createElement('div');
-      div.className='chat-entry';
-      div.onclick=()=>loadChat(item.file);
-      const n=document.createElement('div');
-      n.className='chat-name';
-      n.textContent=item.name;
-      const f=document.createElement('div');
-      f.className='chat-file';
-      f.textContent=item.file;
-      div.appendChild(n);
-      div.appendChild(f);
-      list.appendChild(div);
-    });
-  }
-  async function loadChat(name){
-    const res=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
-    const data=await res.json();
-    showMessages(data.chat,data.result);
-  }
-  async function updateSystem(){
-    const text=document.getElementById('sysPrompt').value;
-    const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'/system '+text})});
-    const data=await res.json();
-    showMessages(data.chat,data.result);
-  }
-  async function sendMsg(){
-    const t=document.getElementById('msg');
-    const text=t.value;t.value='';
-    const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
-    const data=await res.json();
-    showMessages(data.chat,data.result);
-  }
-  function showMessages(chat,res){
-    const msgs=chat.messages;
-    document.getElementById('chatName').textContent=chat.name||'';
-    document.getElementById('chatPath').textContent=chat.file||'';
-    const div=document.getElementById('messages');
-    div.innerHTML='';
-    if(msgs[0]&&msgs[0].role==='system') setSystem(msgs[0].content);
-    msgs.slice(1).forEach(m=>{
-      const p=document.createElement('div');
-      p.className='message '+(m.role==='user'?'user':'assistant');
-      p.innerHTML=md(m.content);
-      div.appendChild(p);
-    });
-    if(res){
-      if(res.system){
-        const p=document.createElement('div');
-        p.className='message system';
-        p.innerHTML=md(res.system);
-        div.appendChild(p);
-      }
-      if(res.error){
-        const p=document.createElement('div');
-        p.className='message error';
-        p.textContent=res.error;
-        div.appendChild(p);
-      }
-      if(res.assistant){
-        const p=document.createElement('div');
-        p.className='message assistant';
-        p.innerHTML=md(res.assistant);
-        div.appendChild(p);
-      }
-      if(res.prompts){
-        const p=document.createElement('div');
-        p.className='message system';
-        p.textContent='Prompts: '+res.prompts.join(', ');
-        div.appendChild(p);
-      }
-      if(res.results){
-        const p=document.createElement('div');
-        p.className='message system';
-        p.innerHTML=md(res.results.join('\n'));
-        div.appendChild(p);
-      }
-      if(res.models){
-        const p=document.createElement('div');
-        p.className='message system';
-        p.textContent='Models: '+res.models.join(', ');
-        div.appendChild(p);
-      }
-      if(res.file){
-        const p=document.createElement('div');
-        p.className='message system';
-        p.textContent=`File: ${res.file} | Model: ${res.model} | Messages: ${res.messages}`;
-        div.appendChild(p);
-      }
-      if(res.summary){
-        document.getElementById('summaryBox').textContent=res.summary;
-      }
-    }
-    loadChats();
-  }
-  loadChats();
-  fetch('/api/chat').then(r=>r.json()).then(d=>showMessages(d));
-  </script>
-</body>
-</html>
-"""
 
-
-@app.get('/', response_class=HTMLResponse)
-async def index(request: Request):
-    return HTMLResponse(INDEX_HTML)
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    with open("static/index.html") as f:
+        return HTMLResponse(f.read())
 
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run('app:app', host='0.0.0.0', port=8000)
+    uvicorn.run('server:app', host='0.0.0.0', port=8000)
