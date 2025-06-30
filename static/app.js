@@ -45,6 +45,22 @@
       f.textContent=item.file;
       div.appendChild(n);
       div.appendChild(f);
+      const btn=document.createElement('button');
+      btn.className='chat-btn';
+      if(currentTab==='archive'){
+        btn.textContent='Restore';
+        btn.onclick=e=>{e.stopPropagation();restoreFile(item.file);};
+        const del=document.createElement('button');
+        del.className='chat-btn';
+        del.textContent='Delete';
+        del.onclick=e=>{e.stopPropagation();deleteFile(item.file);};
+        div.appendChild(btn);
+        div.appendChild(del);
+      }else{
+        btn.textContent='Archive';
+        btn.onclick=e=>{e.stopPropagation();archiveFile(item.file);};
+        div.appendChild(btn);
+      }
       list.appendChild(div);
     });
   }
@@ -65,6 +81,20 @@
     const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
     const data=await res.json();
     showMessages(data.chat,data.result);
+  }
+
+  async function archiveFile(name){
+    await fetch('/api/archive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
+    loadChats();
+  }
+  async function restoreFile(name){
+    await fetch('/api/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
+    loadChats();
+  }
+  async function deleteFile(name){
+    if(!confirm('Delete permanently?')) return;
+    await fetch('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
+    loadChats();
   }
   function showMessages(chat,res){
     const msgs=chat.messages;
