@@ -1,6 +1,16 @@
 let chatData={};
 let currentTab='';
 
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('show');
+}
+
+function hideSidebarOnMobile(){
+  if(window.innerWidth<=700){
+    document.getElementById('sidebar').classList.remove('show');
+  }
+}
+
 function md(t){
   let h=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
@@ -75,6 +85,7 @@ async function loadChat(name){
   const res=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
   const data=await res.json();
   showMessages(data.chat,data.result);
+  hideSidebarOnMobile();
 }
 
 async function updateSystem(){
@@ -90,6 +101,7 @@ async function sendMsg(){
   const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
   const data=await res.json();
   showMessages(data.chat,data.result);
+  hideSidebarOnMobile();
 }
 
 async function archiveFile(name){
