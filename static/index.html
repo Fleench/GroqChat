@@ -22,7 +22,8 @@
     #chatHeader{padding:10px;border-bottom:1px solid #444}
     #chatName{font-size:18px;margin-bottom:2px}
     #chatPath{font-size:12px;color:#aaa}
-    #summaryBox{margin-top:8px;font-size:12px;white-space:pre-wrap}
+    #summaryBox{margin-top:8px;font-size:12px}
+    #summaryText{white-space:pre-wrap}
     #messages{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
     .message{padding:8px;border-radius:4px;max-width:80%;white-space:pre-wrap}
     .user{background:#2f3b55;align-self:flex-end}
@@ -67,15 +68,19 @@
     <h3>Chats</h3>
     <div id='tabButtons'></div>
     <div id='fileList'></div>
+    <button id='clearArchiveBtn' style='display:none' onclick='clearArchive()'>Clear All</button>
   </div>
   <div id='chat'>
     <div id='chatHeader'>
       <div id='chatName'></div>
       <div id='chatPath'></div>
-      <div id='summaryBox'></div>
+      <details id='summaryBox' open>
+        <summary>Summary</summary>
+        <div id='summaryText'></div>
+      </details>
       <details id='sysBox'>
         <summary>System Prompt</summary>
-        <textarea id='sysPrompt' rows='4'></textarea>
+        <textarea id='sysPrompt' rows='4' onchange='updateSystem()'></textarea>
         <button onclick='updateSystem()'>Save</button>
       </details>
     </div>
