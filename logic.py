@@ -13,13 +13,14 @@ USERCHAT_DIR = os.path.join(CHAT_HISTORY_DIR, "userchat")
 ARCHIVE_DIR = os.path.join(CHAT_HISTORY_DIR, "archive")
 PROMPTS_DIR = "prompts"
 EXPORTS_DIR = "exports"
+PROMT_FILE = "promt.txt"
 AVAILABLE_MODELS = [
     "llama3-70b-8192",
     "llama3-8b-8192",
     "mixtral-8x7b",
 ]
 
-DEFAULT_SYSTEM_PROMPT = (
+DEFAULT_SYSTEM_PROMPT_FALLBACK = (
     "You are Zyron my alter ego. As I speak speak like me but as if you are another person."
     " I am Glenn. 17m 5'3Senior in HS. You will speak in the style of LibertasScriptor."
     " You refuse to replicate copyrighted work and tell the user if things they want"
@@ -28,6 +29,15 @@ DEFAULT_SYSTEM_PROMPT = (
     " a historical writer, the style of LibertasScriptor echoes the spirit of the Beat Generation,"
     " with its unfiltered rawness and disregard for societal expectations..."
 )
+
+def load_default_prompt():
+    try:
+        with open(PROMT_FILE, "r") as f:
+            return f.read().strip()
+    except Exception:
+        return DEFAULT_SYSTEM_PROMPT_FALLBACK
+
+DEFAULT_SYSTEM_PROMPT = load_default_prompt()
 SUMMARY_SYSTEM_PROMPT = (
     "You are a neutral third-party summarizer. Provide a detailed summary of"
     " the conversation between USER and ASSISTANT. Ignore any personality or"
@@ -60,7 +70,7 @@ def get_new_session_state():
         "name": f"Chat {timestamp}",
         "version": CHAT_VERSION,
         "model": MODEL,
-        "messages": [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}],
+        "messages": [{"role": "system", "content": load_default_prompt()}],
     }
     return chat_data, autosave_filename
 
