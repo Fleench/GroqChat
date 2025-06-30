@@ -227,9 +227,16 @@ def process_message(text):
     return {"assistant": assistant_response}
 
 
+def get_chat_state():
+    """Return chat data with the active filename."""
+    data = dict(chat_data)
+    data["file"] = active_filename
+    return data
+
+
 @app.get('/api/chat')
 async def get_chat():
-    return chat_data
+    return get_chat_state()
 
 
 @app.get('/api/chats')
@@ -240,13 +247,13 @@ async def get_chats():
 @app.post('/api/load')
 async def api_load(data: dict):
     res = handle_command(f"/load {data.get('filename','')}")
-    return {"result": res, "chat": chat_data}
+    return {"result": res, "chat": get_chat_state()}
 
 
 @app.post('/api/message')
 async def api_message(data: dict):
     res = process_message(data.get('message',''))
-    return {"result": res, "chat": chat_data}
+    return {"result": res, "chat": get_chat_state()}
 
 
 INDEX_HTML = """
@@ -267,6 +274,10 @@ INDEX_HTML = """
     .chat-name{font-size:14px}
     .chat-file{font-size:12px;color:#aaa;margin-left:4px}
     #chat{flex:1;display:flex;flex-direction:column;height:100%}
+    #chatHeader{padding:10px;border-bottom:1px solid #444}
+    #chatName{font-size:18px;margin-bottom:2px}
+    #chatPath{font-size:12px;color:#aaa}
+    #summaryBox{margin-top:8px;font-size:12px;white-space:pre-wrap}
     #messages{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
     .message{padding:8px;border-radius:4px;max-width:80%;white-space:pre-wrap}
     .user{background:#2f3b55;align-self:flex-end}
@@ -275,7 +286,6 @@ INDEX_HTML = """
     .error{background:#552222;color:#ffbbbb;align-self:center}
     #sysBox{margin-top:10px}
     #sysPrompt{width:100%;background:#333;color:#eee;border:1px solid #555;margin-top:4px}
-    #summaryBox{margin-top:10px;font-size:12px;white-space:pre-wrap}
     #input{display:flex;border-top:1px solid #444}
     #input textarea{flex:1;padding:5px;background:#333;color:#eee;border:1px solid #444}
     #input button{background:#444;color:#eee;border:1px solid #555;padding:5px 10px}
@@ -286,14 +296,18 @@ INDEX_HTML = """
     <h3>Chats</h3>
     <div id='tabButtons'></div>
     <div id='fileList'></div>
-    <details id='sysBox'>
-      <summary>System Prompt</summary>
-      <textarea id='sysPrompt' rows='4'></textarea>
-      <button onclick='updateSystem()'>Save</button>
-    </details>
-    <div id='summaryBox'></div>
   </div>
   <div id='chat'>
+    <div id='chatHeader'>
+      <div id='chatName'></div>
+      <div id='chatPath'></div>
+      <div id='summaryBox'></div>
+      <details id='sysBox'>
+        <summary>System Prompt</summary>
+        <textarea id='sysPrompt' rows='4'></textarea>
+        <button onclick='updateSystem()'>Save</button>
+      </details>
+    </div>
     <div id='messages'></div>
     <div id='input'>
       <textarea id='msg' rows='3'></textarea>
@@ -354,22 +368,25 @@ INDEX_HTML = """
   async function loadChat(name){
     const res=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
     const data=await res.json();
-    showMessages(data.chat.messages,data.result);
+    showMessages(data.chat,data.result);
   }
   async function updateSystem(){
     const text=document.getElementById('sysPrompt').value;
     const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'/system '+text})});
     const data=await res.json();
-    showMessages(data.chat.messages,data.result);
+    showMessages(data.chat,data.result);
   }
   async function sendMsg(){
     const t=document.getElementById('msg');
     const text=t.value;t.value='';
     const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
     const data=await res.json();
-    showMessages(data.chat.messages,data.result);
+    showMessages(data.chat,data.result);
   }
-  function showMessages(msgs,res){
+  function showMessages(chat,res){
+    const msgs=chat.messages;
+    document.getElementById('chatName').textContent=chat.name||'';
+    document.getElementById('chatPath').textContent=chat.file||'';
     const div=document.getElementById('messages');
     div.innerHTML='';
     if(msgs[0]&&msgs[0].role==='system') setSystem(msgs[0].content);
@@ -429,7 +446,7 @@ INDEX_HTML = """
     loadChats();
   }
   loadChats();
-  fetch('/api/chat').then(r=>r.json()).then(d=>showMessages(d.messages));
+  fetch('/api/chat').then(r=>r.json()).then(d=>showMessages(d));
   </script>
 </body>
 </html>
