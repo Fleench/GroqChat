@@ -21,6 +21,7 @@ CHAT_VERSION = "1.0"
 CHAT_HISTORY_DIR = "chat_history"
 AUTOSAVE_DIR = os.path.join(CHAT_HISTORY_DIR, "autosave")
 USERCHAT_DIR = os.path.join(CHAT_HISTORY_DIR, "userchat")
+ARCHIVE_DIR = os.path.join(CHAT_HISTORY_DIR, "archive")
 PROMPTS_DIR = "prompts"
 EXPORTS_DIR = "exports"
 AVAILABLE_MODELS = [
@@ -33,6 +34,7 @@ def ensure_directories():
     """Ensure chat history directories exist."""
     os.makedirs(AUTOSAVE_DIR, exist_ok=True)
     os.makedirs(USERCHAT_DIR, exist_ok=True)
+    os.makedirs(ARCHIVE_DIR, exist_ok=True)
     os.makedirs(EXPORTS_DIR, exist_ok=True)
 
 def sort_chats():
@@ -233,10 +235,13 @@ def load_chat_from_file(filename):
     if not os.path.exists(filepath):
         alt_auto = os.path.join(AUTOSAVE_DIR, filename)
         alt_user = os.path.join(USERCHAT_DIR, filename)
+        alt_arch = os.path.join(ARCHIVE_DIR, filename)
         if os.path.exists(alt_auto):
             filepath = alt_auto
         elif os.path.exists(alt_user):
             filepath = alt_user
+        elif os.path.exists(alt_arch):
+            filepath = alt_arch
         else:
             print(f"\n[Error] File not found: {filepath}")
             return None, None
