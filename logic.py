@@ -71,6 +71,7 @@ def get_new_session_state():
         "version": CHAT_VERSION,
         "model": MODEL,
         "messages": [{"role": "system", "content": load_default_prompt()}],
+        "summary": "",
     }
     return chat_data, autosave_filename
 
@@ -126,11 +127,13 @@ def load_chat_from_file(filename):
             "version": "0",
             "model": MODEL,
             "messages": data,
+            "summary": "",
         }
     elif isinstance(data, dict) and "messages" in data:
         data.setdefault("name", os.path.splitext(os.path.basename(filepath))[0])
         data.setdefault("model", MODEL)
         data.setdefault("version", CHAT_VERSION)
+        data.setdefault("summary", "")
         chat_data = data
     else:
         return None, None

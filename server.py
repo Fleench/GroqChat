@@ -127,6 +127,22 @@ def delete_file(relpath: str) -> bool:
         return False
 
 
+def clear_archive() -> bool:
+    """Remove all chat files from the archive directory."""
+    success = True
+    if not os.path.exists(logic.ARCHIVE_DIR):
+        return True
+    for fname in os.listdir(logic.ARCHIVE_DIR):
+        if not fname.endswith('.chat'):
+            continue
+        path = os.path.join(logic.ARCHIVE_DIR, fname)
+        try:
+            os.remove(path)
+        except Exception:
+            success = False
+    return success
+
+
 def handle_command(user_input):
     global chat_data, messages, active_filename, MODEL
     parts = user_input.split()
@@ -219,6 +235,8 @@ def handle_command(user_input):
             return {"error": "Unknown prompt command"}
     elif cmd == '/summary':
         s = summarize(messages)
+        chat_data['summary'] = s
+        logic.save_chat_to_file(active_filename, chat_data)
         return {"summary": s}
     elif cmd == '/search':
         if len(parts) < 2:
@@ -318,6 +336,12 @@ async def api_restore(data: dict):
 @app.post('/api/delete')
 async def api_delete(data: dict):
     success = delete_file(data.get('filename', ''))
+    return {"success": success, "chats": list_chats()}
+
+
+@app.post('/api/clear-archive')
+async def api_clear_archive():
+    success = clear_archive()
     return {"success": success, "chats": list_chats()}
 
 

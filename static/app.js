@@ -48,6 +48,7 @@ function renderTabs(order){
 function renderFiles(){
   const list=document.getElementById('fileList');
   list.innerHTML='';
+  document.getElementById('clearArchiveBtn').style.display=currentTab==='archive'?'':'none';
   if(!currentTab) return;
   chatData[currentTab].forEach(item=>{
     const div=document.createElement('div');
@@ -120,12 +121,19 @@ async function deleteFile(name){
   loadChats();
 }
 
+async function clearArchive(){
+  if(!confirm('Delete all archived chats?')) return;
+  await fetch('/api/clear-archive',{method:'POST'});
+  loadChats();
+}
+
 function showMessages(chat,res){
   const msgs=chat.messages;
   document.getElementById('chatName').textContent=chat.name||'';
   document.getElementById('chatPath').textContent=chat.file||'';
   const div=document.getElementById('messages');
   div.innerHTML='';
+  document.getElementById('summaryText').textContent=chat.summary||'';
   if(msgs[0]&&msgs[0].role==='system') setSystem(msgs[0].content);
   msgs.slice(1).forEach(m=>{
     const p=document.createElement('div');
@@ -171,8 +179,11 @@ function showMessages(chat,res){
       div.appendChild(p);
     }
     if(res.summary){
-      document.getElementById('summaryBox').textContent=res.summary;
+      document.getElementById('summaryText').textContent=res.summary;
     }
+  }
+  if(chat.summary){
+    document.getElementById('summaryText').textContent=chat.summary;
   }
   loadChats();
 }
