@@ -13,21 +13,22 @@
   async function loadChats(){
     const res=await fetch('/api/chats');
     chatData=await res.json();
-    const keys=Object.keys(chatData);
+    const keys=Object.keys(chatData).filter(k=>k!=='archive').sort();
+    if(chatData.archive) keys.push('archive');
     if(!currentTab) currentTab=keys[0]||'';
-    renderTabs();
+    renderTabs(keys);
     renderFiles();
   }
-  function renderTabs(){
+  function renderTabs(order){
     const tabs=document.getElementById('tabButtons');
     tabs.innerHTML='';
-    for(const dir in chatData){
+    (order||Object.keys(chatData)).forEach(dir=>{
       const b=document.createElement('div');
       b.className='tab'+(dir===currentTab?' active':'');
       b.textContent=dir;
-      b.onclick=()=>{currentTab=dir;renderTabs();renderFiles();};
+      b.onclick=()=>{currentTab=dir;renderTabs(order);renderFiles();};
       tabs.appendChild(b);
-    }
+    });
   }
   function renderFiles(){
     const list=document.getElementById('fileList');
