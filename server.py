@@ -42,7 +42,6 @@ client = logic.setup_client()
 MODEL = logic.MODEL
 chat_data, active_filename = logic.get_new_session_state()
 messages = chat_data["messages"]
-logic.save_chat_to_file(active_filename, chat_data)
 
 
 def summarize(messages):
@@ -194,8 +193,13 @@ def handle_command(user_input):
     if cmd == '/new':
         chat_data, active_filename = logic.get_new_session_state()
         messages = chat_data['messages']
-        logic.save_chat_to_file(active_filename, chat_data)
-        return {"system": f"New chat started: {chat_data['name']}"}
+        return {
+            "system": (
+                f"New chat started: {chat_data['name']}. Autosave file will be "
+                f"created at '{os.path.join(logic.CHAT_HISTORY_DIR, active_filename)}' "
+                "after your first message"
+            )
+        }
     elif cmd == '/save':
         if len(parts) < 2:
             return {"error": "Usage: /save <name>"}
