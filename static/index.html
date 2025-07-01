@@ -32,6 +32,7 @@
     .error{background:#552222;color:#ffbbbb;align-self:center}
     #sysBox{margin-top:10px}
     #sysPrompt{width:100%;background:#333;color:#eee;border:1px solid #555;margin-top:4px}
+    #commandBar{padding:5px;border-bottom:1px solid #444;background:#222;text-align:right}
     #input{display:flex;border-top:1px solid #444;position:sticky;bottom:0;background:#1e1e1e}
     #input textarea{flex:1;padding:5px;background:#333;color:#eee;border:1px solid #444}
     #input button{background:#444;color:#eee;border:1px solid #555;padding:5px 10px}
@@ -83,6 +84,9 @@
         <textarea id='sysPrompt' rows='4' onchange='updateSystem()'></textarea>
         <button onclick='updateSystem()'>Save</button>
       </details>
+      <div id='commandBar'>
+        <button onclick='updateServer()'>Update Server</button>
+      </div>
     </div>
     <div id='messages'></div>
     <div id='input'>
