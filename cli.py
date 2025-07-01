@@ -492,11 +492,13 @@ def main():
     chat_data, active_filename = get_new_session_state()
     messages = chat_data["messages"]
 
-    # Save the initial empty chat state for recovery
-    save_chat_to_file(active_filename, chat_data)
-    
+    # Do not create the autosave file until the first message is sent
+
     print_welcome_message()
-    print(colored(f"[System] New chat started: {chat_data['name']}. Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'", SYSTEM_COLOR))
+    print(colored(
+        f"[System] New chat started: {chat_data['name']}. Autosave file will be created at '{os.path.join(CHAT_HISTORY_DIR, active_filename)}' after your first message",
+        SYSTEM_COLOR,
+    ))
 
     while True:
         try:
@@ -514,9 +516,11 @@ def main():
                 if command == "/new":
                     chat_data, active_filename = get_new_session_state()
                     messages = chat_data["messages"]
-                    save_chat_to_file(active_filename, chat_data)
                     print(colored(f"\n[System] New chat session started: {chat_data['name']}", SYSTEM_COLOR))
-                    print(colored(f"[System] Autosaving to '{os.path.join(CHAT_HISTORY_DIR, active_filename)}'", SYSTEM_COLOR))
+                    print(colored(
+                        f"[System] Autosave file will be created at '{os.path.join(CHAT_HISTORY_DIR, active_filename)}' after your first message",
+                        SYSTEM_COLOR,
+                    ))
                     continue
 
                 elif command == "/save":
