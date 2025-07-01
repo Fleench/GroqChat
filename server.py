@@ -25,7 +25,7 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
+DEV_MODE = os.getenv("DEV_MODE", "true").lower() == "true"
 
 
 @app.middleware("http")
