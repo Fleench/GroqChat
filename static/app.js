@@ -133,6 +133,14 @@ async function updateServer(){
   setTimeout(()=>location.reload(),2000);
 }
 
+async function updateApiKey(){
+  const key=document.getElementById('apiKeyInput').value.trim();
+  if(!key) return;
+  await fetch('/api/api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})});
+  document.getElementById('apiKeyInput').value='';
+  alert('API key updated');
+}
+
 function showMessages(chat,res){
   const msgs=chat.messages;
   document.getElementById('chatName').textContent=chat.name||'';

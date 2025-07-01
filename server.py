@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime
 import subprocess
 import sys
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 
 # Load variables from .env first and fall back to system environment values
 load_dotenv(override=True)
@@ -26,6 +26,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 DEV_MODE = os.getenv("DEV_MODE", "true").lower() == "true"
+ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
 
 
 @app.middleware("http")
@@ -391,6 +392,23 @@ async def api_delete(data: dict):
 async def api_clear_archive():
     success = clear_archive()
     return {"success": success, "chats": list_chats()}
+
+
+@app.post('/api/api-key')
+async def api_set_api_key(data: dict):
+    """Update the stored GROQ_API_KEY value."""
+    global client
+    key = data.get('api_key', '').strip()
+    if not key:
+        return {"success": False}
+    try:
+        set_key(ENV_PATH, 'GROQ_API_KEY', key)
+    except Exception:
+        return {"success": False}
+    os.environ['GROQ_API_KEY'] = key
+    logic.API_KEY = key
+    client = logic.setup_client()
+    return {"success": True}
 
 
 @app.post('/api/update')
