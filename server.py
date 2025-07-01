@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 import json
 import shutil
+from datetime import datetime
 
 import logic
 
@@ -62,17 +63,32 @@ def list_chats():
         path = os.path.join(logic.CHAT_HISTORY_DIR, d)
         if os.path.isdir(path):
             chats = []
-            for fname in os.listdir(path):
-                if not fname.endswith('.chat'):
-                    continue
-                fpath = os.path.join(path, fname)
-                try:
-                    with open(fpath, 'r') as f:
-                        j = json.load(f)
-                    name = j.get('name', os.path.splitext(fname)[0]) if isinstance(j, dict) else os.path.splitext(fname)[0]
-                except Exception:
-                    name = os.path.splitext(fname)[0]
-                chats.append({'file': os.path.join(d, fname), 'name': name})
+            if d == 'archive':
+                for root, _, files in os.walk(path):
+                    for fname in files:
+                        if not fname.endswith('.chat'):
+                            continue
+                        fpath = os.path.join(root, fname)
+                        rel = os.path.relpath(fpath, logic.CHAT_HISTORY_DIR)
+                        try:
+                            with open(fpath, 'r') as f:
+                                j = json.load(f)
+                            name = j.get('name', os.path.splitext(fname)[0]) if isinstance(j, dict) else os.path.splitext(fname)[0]
+                        except Exception:
+                            name = os.path.splitext(fname)[0]
+                        chats.append({'file': rel, 'name': name})
+            else:
+                for fname in os.listdir(path):
+                    if not fname.endswith('.chat'):
+                        continue
+                    fpath = os.path.join(path, fname)
+                    try:
+                        with open(fpath, 'r') as f:
+                            j = json.load(f)
+                        name = j.get('name', os.path.splitext(fname)[0]) if isinstance(j, dict) else os.path.splitext(fname)[0]
+                    except Exception:
+                        name = os.path.splitext(fname)[0]
+                    chats.append({'file': os.path.join(d, fname), 'name': name})
             data[d] = chats
     return data
 
@@ -88,7 +104,14 @@ def archive_file(relpath: str) -> bool:
         data["archived_from"] = relpath
         with open(src, "w") as f:
             json.dump(data, f, indent=2)
-        dest = os.path.join(logic.ARCHIVE_DIR, os.path.basename(relpath))
+        subdir = os.path.dirname(relpath)
+        dest_dir = os.path.join(logic.ARCHIVE_DIR, subdir)
+        os.makedirs(dest_dir, exist_ok=True)
+        dest = os.path.join(dest_dir, os.path.basename(relpath))
+        if os.path.exists(dest):
+            base, ext = os.path.splitext(os.path.basename(relpath))
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            dest = os.path.join(dest_dir, f"{base}-{ts}{ext}")
         shutil.move(src, dest)
         return True
     except Exception:
@@ -97,7 +120,8 @@ def archive_file(relpath: str) -> bool:
 
 def restore_file(relpath: str) -> bool:
     """Restore a chat from the archive to its original location."""
-    src = os.path.join(logic.ARCHIVE_DIR, os.path.basename(relpath))
+    subpath = relpath[len("archive/"):] if relpath.startswith("archive/") else relpath
+    src = os.path.join(logic.ARCHIVE_DIR, subpath)
     if not os.path.exists(src):
         return False
     try:
@@ -117,7 +141,8 @@ def restore_file(relpath: str) -> bool:
 
 def delete_file(relpath: str) -> bool:
     """Delete a chat file from the archive."""
-    path = os.path.join(logic.ARCHIVE_DIR, os.path.basename(relpath))
+    subpath = relpath[len("archive/"):] if relpath.startswith("archive/") else relpath
+    path = os.path.join(logic.ARCHIVE_DIR, subpath)
     if not os.path.exists(path):
         return False
     try:
@@ -132,14 +157,15 @@ def clear_archive() -> bool:
     success = True
     if not os.path.exists(logic.ARCHIVE_DIR):
         return True
-    for fname in os.listdir(logic.ARCHIVE_DIR):
-        if not fname.endswith('.chat'):
-            continue
-        path = os.path.join(logic.ARCHIVE_DIR, fname)
-        try:
-            os.remove(path)
-        except Exception:
-            success = False
+    for root, _, files in os.walk(logic.ARCHIVE_DIR):
+        for fname in files:
+            if not fname.endswith('.chat'):
+                continue
+            path = os.path.join(root, fname)
+            try:
+                os.remove(path)
+            except Exception:
+                success = False
     return success
 
 
