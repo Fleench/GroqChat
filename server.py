@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -8,6 +8,9 @@ import shutil
 from datetime import datetime
 import subprocess
 import sys
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import logic
 
@@ -20,6 +23,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
+
+
+@app.middleware("http")
+async def verify_app_key(request: Request, call_next):
+    if not DEV_MODE:
+        required_key = os.getenv("APP_KEY")
+        if required_key and request.headers.get("x-app-key") != required_key:
+            raise HTTPException(status_code=403, detail="Invalid or missing app key")
+    response = await call_next(request)
+    return response
 
 logic.ensure_directories()
 client = logic.setup_client()

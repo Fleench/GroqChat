@@ -11,13 +11,17 @@ Run `python cli.py convert` to update old `.chat` files to version 1.0.
 
 ## Usage
 
-1. **Set your API key**
+1. **Create a `.env` file**
 
-   Export the `GROQ_API_KEY` environment variable before running the tool:
+   Copy `.env.example` to `.env` and edit the values:
 
    ```bash
-   export GROQ_API_KEY="your_api_key"
+   cp .env.example .env
+   # edit .env and set GROQ_API_KEY and APP_KEY
    ```
+
+   `APP_KEY` is the required HTTP header value used by the web server.
+   Set `DEV_MODE=true` in `.env` to disable header checking during development.
 
 2. **Install dependencies**
 

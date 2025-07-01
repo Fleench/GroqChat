@@ -6,6 +6,9 @@ rich
 fastapi
 uvicorn
 
+# Environment
+python-dotenv
+
 #update requirements
 requests
 

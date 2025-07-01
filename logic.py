@@ -3,6 +3,9 @@ import json
 import shutil
 from datetime import datetime
 from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
 
 API_KEY = os.environ.get("GROQ_API_KEY")
 MODEL = "llama3-70b-8192"
