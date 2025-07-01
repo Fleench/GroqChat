@@ -4,6 +4,9 @@ import sys
 from datetime import datetime
 import shutil
 from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
 from termcolor import colored
 from rich.console import Console
 from rich.markdown import Markdown
