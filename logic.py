@@ -5,9 +5,11 @@ from datetime import datetime
 from groq import Groq
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load variables from .env first and fall back to system environment
+load_dotenv(override=True)
 
-API_KEY = os.environ.get("GROQ_API_KEY")
+# Prefer .env values, then system environment, then a fallback
+API_KEY = os.getenv("GROQ_API_KEY", "your_groq_api_key")
 MODEL = "llama3-70b-8192"
 CHAT_VERSION = "1.0"
 CHAT_HISTORY_DIR = "chat_history"

@@ -6,7 +6,8 @@ import shutil
 from groq import Groq
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load variables from .env and let them override system environment values.
+load_dotenv(override=True)
 from termcolor import colored
 from rich.console import Console
 from rich.markdown import Markdown
@@ -18,7 +19,8 @@ console = Console()
 # IMPORTANT: Set your Groq API key as an environment variable named 'GROQ_API_KEY'
 # for this script to work.
 # For example, in your terminal: export GROQ_API_KEY='your_api_key_here'
-API_KEY = os.environ.get("GROQ_API_KEY")
+# Prefer the value from .env, then the system environment, then a fallback.
+API_KEY = os.getenv("GROQ_API_KEY", "your_groq_api_key")
 MODEL = "llama3-70b-8192"
 CHAT_VERSION = "1.0"
 CHAT_HISTORY_DIR = "chat_history"

@@ -10,7 +10,8 @@ import subprocess
 import sys
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load variables from .env first and fall back to system environment values
+load_dotenv(override=True)
 
 import logic
 
@@ -30,7 +31,7 @@ DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
 @app.middleware("http")
 async def verify_app_key(request: Request, call_next):
     if not DEV_MODE:
-        required_key = os.getenv("APP_KEY")
+        required_key = os.getenv("APP_KEY", "your_app_key")
         if required_key and request.headers.get("x-app-key") != required_key:
             raise HTTPException(status_code=403, detail="Invalid or missing app key")
     response = await call_next(request)
