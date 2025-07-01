@@ -375,9 +375,13 @@ async def api_clear_archive():
 
 @app.post('/api/update')
 async def api_update(background_tasks: BackgroundTasks):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     def do_update():
-        subprocess.run([sys.executable, 'update.py'])
-        os.execl(sys.executable, sys.executable, 'server.py')
+        update_path = os.path.join(script_dir, 'update.py')
+        subprocess.run([sys.executable, update_path], cwd=script_dir)
+        server_path = os.path.join(script_dir, 'server.py')
+        os.execl(sys.executable, sys.executable, server_path)
 
     background_tasks.add_task(do_update)
     return {"status": "updating"}
