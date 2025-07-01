@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -6,6 +6,8 @@ import os
 import json
 import shutil
 from datetime import datetime
+import subprocess
+import sys
 
 import logic
 
@@ -369,6 +371,16 @@ async def api_delete(data: dict):
 async def api_clear_archive():
     success = clear_archive()
     return {"success": success, "chats": list_chats()}
+
+
+@app.post('/api/update')
+async def api_update(background_tasks: BackgroundTasks):
+    def do_update():
+        subprocess.run([sys.executable, 'update.py'])
+        os.execl(sys.executable, sys.executable, 'server.py')
+
+    background_tasks.add_task(do_update)
+    return {"status": "updating"}
 
 
 @app.post('/api/message')

@@ -127,6 +127,12 @@ async function clearArchive(){
   loadChats();
 }
 
+async function updateServer(){
+  if(!confirm('Update and restart server?')) return;
+  await fetch('/api/update',{method:'POST'});
+  setTimeout(()=>location.reload(),2000);
+}
+
 function showMessages(chat,res){
   const msgs=chat.messages;
   document.getElementById('chatName').textContent=chat.name||'';
