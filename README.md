@@ -21,7 +21,8 @@ Run `python cli.py convert` to update old `.chat` files to version 1.0.
    ```
 
    `APP_KEY` is the required HTTP header value used by the web server.
-   Set `DEV_MODE=true` in `.env` to disable header checking during development.
+   Development mode is enabled by default. Set `DEV_MODE=false` in `.env`
+   to require the `x-app-key` header when deploying to production.
 
 2. **Install dependencies**
 
