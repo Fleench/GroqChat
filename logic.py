@@ -1,5 +1,7 @@
 import os
 import json
+"""Utility functions shared by the CLI and web server."""
+
 import shutil
 from datetime import datetime
 from groq import Groq
@@ -56,6 +58,8 @@ HISTORY_LIMIT = 10
 
 
 def ensure_directories():
+    """Create all required directories if they don't exist."""
+
     os.makedirs(AUTOSAVE_DIR, exist_ok=True)
     os.makedirs(USERCHAT_DIR, exist_ok=True)
     os.makedirs(ARCHIVE_DIR, exist_ok=True)
@@ -63,12 +67,16 @@ def ensure_directories():
 
 
 def setup_client():
+    """Return a Groq client instance using the configured API key."""
+
     if not API_KEY:
         raise RuntimeError("GROQ_API_KEY environment variable not set")
     return Groq(api_key=API_KEY)
 
 
 def get_new_session_state():
+    """Create a new chat object and default autosave path."""
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     autosave_filename = os.path.join("autosave", f"autosave-{timestamp}.chat")
     chat_data = {
@@ -82,6 +90,8 @@ def get_new_session_state():
 
 
 def generate_chat_name(client, messages):
+    """Use the model to generate a short descriptive name for the chat."""
+
     convo = "\n".join(
         f"{m['role']}: {m['content']}" for m in messages if m['role'] != 'system'
     )
@@ -100,6 +110,8 @@ def generate_chat_name(client, messages):
 
 
 def save_chat_to_file(filename, chat_data):
+    """Write ``chat_data`` to ``filename`` inside ``CHAT_HISTORY_DIR``."""
+
     ensure_directories()
     filepath = os.path.join(CHAT_HISTORY_DIR, filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -109,6 +121,8 @@ def save_chat_to_file(filename, chat_data):
 
 
 def load_chat_from_file(filename):
+    """Load chat data from disk, searching the history folders."""
+
     ensure_directories()
     filepath = os.path.join(CHAT_HISTORY_DIR, filename)
     if not os.path.exists(filepath):
@@ -146,10 +160,14 @@ def load_chat_from_file(filename):
 
 
 def ensure_prompts_dir():
+    """Create the directory used to store custom prompts."""
+
     os.makedirs(PROMPTS_DIR, exist_ok=True)
 
 
 def list_prompts():
+    """Return a list of saved prompt names without extensions."""
+
     ensure_prompts_dir()
     names = []
     for fname in os.listdir(PROMPTS_DIR):
@@ -159,6 +177,8 @@ def list_prompts():
 
 
 def save_prompt(name, text):
+    """Save ``text`` to a prompt file with the given ``name``."""
+
     ensure_prompts_dir()
     path = os.path.join(PROMPTS_DIR, f"{name}.txt")
     with open(path, 'w') as f:
@@ -167,6 +187,8 @@ def save_prompt(name, text):
 
 
 def load_prompt(name):
+    """Return the contents of a saved prompt or ``None`` if missing."""
+
     ensure_prompts_dir()
     path = os.path.join(PROMPTS_DIR, f"{name}.txt")
     if not os.path.exists(path):
@@ -176,6 +198,8 @@ def load_prompt(name):
 
 
 def export_chat(chat_data, name):
+    """Export ``chat_data`` to a text or Markdown file in ``EXPORTS_DIR``."""
+
     ensure_directories()
     if not name:
         name = chat_data["name"].replace(" ", "_") + ".txt"

@@ -1,3 +1,5 @@
+"""Interactive command line client for the GroqChat application."""
+
 import os
 import json
 import sys
@@ -5,6 +7,7 @@ from datetime import datetime
 import shutil
 from groq import Groq
 from dotenv import load_dotenv
+import subprocess
 
 # Load variables from .env and let them override system environment values.
 load_dotenv(override=True)
@@ -291,6 +294,7 @@ def print_welcome_message():
     print("  /summary       - Summarize the current chat.")
     print("  /search <term> - Search messages in the current chat.")
     print("  /export <name> - Export chat as Markdown or text.")
+    print("  /update       - Update the application and restart.")
     print("  /model <name>  - Change the model in use.")
     print("  /model select  - Choose a model from a list.")
     print("  /info          - Display chat info.")
@@ -671,6 +675,12 @@ def main():
                     path = export_chat(chat_data, name)
                     print(colored(f"\n[System] Exported to '{path}'", SYSTEM_COLOR))
                     continue
+
+                elif command == "/update":
+                    print(colored("\n[System] Updating application...", SYSTEM_COLOR))
+                    subprocess.run([sys.executable, "update.py"])
+                    print(colored("[System] Restarting...", SYSTEM_COLOR))
+                    os.execl(sys.executable, sys.executable, *sys.argv)
 
                 elif command == "/model":
                     if len(command_parts) == 1:

@@ -1,3 +1,5 @@
+"""FastAPI server exposing the GroqChat web interface and REST API."""
+
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +33,7 @@ ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
 
 @app.middleware("http")
 async def verify_app_key(request: Request, call_next):
+    """Optional header based authentication for production deployments."""
     if not DEV_MODE:
         required_key = os.getenv("APP_KEY", "your_app_key")
         if required_key and request.headers.get("x-app-key") != required_key:
@@ -38,6 +41,7 @@ async def verify_app_key(request: Request, call_next):
     response = await call_next(request)
     return response
 
+# Prepare the chat environment and start a session on startup
 logic.ensure_directories()
 client = logic.setup_client()
 MODEL = logic.MODEL
@@ -46,6 +50,8 @@ messages = chat_data["messages"]
 
 
 def summarize(messages):
+    """Return a short summary of the most recent conversation history."""
+
     recent = messages[-logic.SUMMARY_HISTORY_LIMIT:]
     convo = "\n".join(
         f"{m['role']}: {m['content']}" for m in recent if m['role'] != 'system'
@@ -65,6 +71,8 @@ def summarize(messages):
 
 
 def search_messages(messages, term):
+    """Return list of message strings containing the search term."""
+
     term = term.lower()
     results = []
     for i, m in enumerate(messages[1:], start=1):
@@ -74,6 +82,8 @@ def search_messages(messages, term):
 
 
 def list_chats():
+    """Return a mapping of chat directories to available chat files."""
+
     data = {}
     if not os.path.exists(logic.CHAT_HISTORY_DIR):
         return data
@@ -188,6 +198,8 @@ def clear_archive() -> bool:
 
 
 def handle_command(user_input):
+    """Process a slash command from the UI and return a response dict."""
+
     global chat_data, messages, active_filename, MODEL
     parts = user_input.split()
     cmd = parts[0]
@@ -322,6 +334,8 @@ def handle_command(user_input):
 
 
 def process_message(text):
+    """Handle a user message or command and return the response."""
+
     global chat_data, messages
     if text.startswith('/'):
         return handle_command(text)
@@ -356,40 +370,47 @@ def get_chat_state():
 
 @app.get('/api/chat')
 async def get_chat():
+    """Return the current chat including pending messages."""
     return get_chat_state()
 
 
 @app.get('/api/chats')
 async def get_chats():
+    """List saved chats grouped by directory."""
     return list_chats()
 
 
 @app.post('/api/load')
 async def api_load(data: dict):
+    """Load a chat file and return the updated state."""
     res = handle_command(f"/load {data.get('filename','')}")
     return {"result": res, "chat": get_chat_state()}
 
 
 @app.post('/api/archive')
 async def api_archive(data: dict):
+    """Archive the given chat file."""
     success = archive_file(data.get('filename', ''))
     return {"success": success, "chats": list_chats()}
 
 
 @app.post('/api/restore')
 async def api_restore(data: dict):
+    """Restore an archived chat."""
     success = restore_file(data.get('filename', ''))
     return {"success": success, "chats": list_chats()}
 
 
 @app.post('/api/delete')
 async def api_delete(data: dict):
+    """Delete an archived chat permanently."""
     success = delete_file(data.get('filename', ''))
     return {"success": success, "chats": list_chats()}
 
 
 @app.post('/api/clear-archive')
 async def api_clear_archive():
+    """Delete all chats from the archive."""
     success = clear_archive()
     return {"success": success, "chats": list_chats()}
 
@@ -413,6 +434,7 @@ async def api_set_api_key(data: dict):
 
 @app.post('/api/update')
 async def api_update(background_tasks: BackgroundTasks):
+    """Run the updater in the background and then restart the server."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     def do_update():
@@ -427,6 +449,7 @@ async def api_update(background_tasks: BackgroundTasks):
 
 @app.post('/api/message')
 async def api_message(data: dict):
+    """Process a chat message or command."""
     res = process_message(data.get('message',''))
     return {"result": res, "chat": get_chat_state()}
 
@@ -434,6 +457,7 @@ async def api_message(data: dict):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
+    """Serve the single page web application."""
     with open("static/index.html") as f:
         return HTMLResponse(f.read())
 
