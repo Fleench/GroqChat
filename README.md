@@ -55,6 +55,7 @@ Run `python cli.py convert` to update old `.chat` files to version 1.0.
 - `/search <term>` find messages containing a term in the current chat
 - `/export <name>` save the chat as Markdown or text
 - `/update` update the application and restart
+- `/update` also works in the web UI command bar or chat input
 - `/model <name>` switch to a different model
 - `/model select` open a UI to choose a model
 - `/info` display the active filename, model and message count
