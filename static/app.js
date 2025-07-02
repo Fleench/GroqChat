@@ -141,6 +141,13 @@ async function updateApiKey(){
   alert('API key updated');
 }
 
+async function newChat(){
+  const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'/new'})});
+  const data=await res.json();
+  showMessages(data.chat,data.result);
+  hideSidebarOnMobile();
+}
+
 function showMessages(chat,res){
   const msgs=chat.messages;
   document.getElementById('chatName').textContent=chat.name||'';
