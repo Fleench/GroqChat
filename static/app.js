@@ -5,17 +5,6 @@ function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('show');
 }
 
-function toggleCommandBar(){
-  const bar=document.getElementById('commandBar');
-  const btn=document.getElementById('cmdToggle');
-  if(bar.style.display==='block'){
-    bar.style.display='none';
-    btn.textContent='Commands';
-  }else{
-    bar.style.display='block';
-    btn.textContent='Close';
-  }
-}
 
 function hideSidebarOnMobile(){
   if(window.innerWidth<=700){
