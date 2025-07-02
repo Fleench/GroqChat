@@ -10,6 +10,7 @@ import shutil
 from datetime import datetime
 import subprocess
 import sys
+import threading
 from dotenv import load_dotenv, set_key
 
 # Load variables from .env first and fall back to system environment values
@@ -308,6 +309,17 @@ def handle_command(user_input):
         name = parts[1] if len(parts) > 1 else ''
         path = logic.export_chat(chat_data, name)
         return {"system": f"Exported to {path}"}
+    elif cmd == '/update':
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+
+        def do_update():
+            update_path = os.path.join(script_dir, 'update.py')
+            subprocess.run([sys.executable, update_path], cwd=script_dir)
+            server_path = os.path.join(script_dir, 'server.py')
+            os.execl(sys.executable, sys.executable, server_path)
+
+        threading.Thread(target=do_update, daemon=True).start()
+        return {"system": "Updating server..."}
     elif cmd == '/model':
         if len(parts) == 1:
             return {"system": f"Current model: {MODEL}"}
