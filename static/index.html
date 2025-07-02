@@ -44,6 +44,9 @@
     #input button{background:#444;color:#eee;border:1px solid #555;padding:5px 10px;border-radius:4px;transition:background .2s}
     #input button:hover{background:#555}
 
+    #cmdToggle{margin-top:10px}
+    #commandBar{position:sticky;bottom:0;background:#2b2b2b;padding:10px;border-top:1px solid #444;display:flex;flex-direction:column;gap:6px}
+
     /* minimal scrollbars */
     #sidebar, #messages {
       scrollbar-width: thin;
@@ -78,11 +81,14 @@
     <div id='tabButtons'></div>
     <div id='fileList'></div>
     <button id='clearArchiveBtn' style='display:none' onclick='clearArchive()'>Clear All</button>
-    <div id='apiKeyBox' style='margin-top:10px;'>
-      <input type='password' id='apiKeyInput' placeholder='API key' style='width:100%;box-sizing:border-box;margin-bottom:4px;background:#333;color:#eee;border:1px solid #555'>
-      <button onclick='updateApiKey()'>Update Key</button>
+    <button id='cmdToggle' onclick='toggleCommandBar()'>Commands</button>
+    <div id='commandBar' style='display:none'>
+      <div id='apiKeyBox' style='margin-top:10px;'>
+        <input type='password' id='apiKeyInput' placeholder='API key' style='width:100%;box-sizing:border-box;margin-bottom:4px;background:#333;color:#eee;border:1px solid #555'>
+        <button onclick='updateApiKey()'>Update Key</button>
+      </div>
+      <button onclick='updateServer()'>Update Server</button>
     </div>
-    <button onclick='updateServer()'>Update Server</button>
   </div>
   <div id='chat'>
     <div id='chatHeader'>
