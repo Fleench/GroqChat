@@ -1,17 +1,22 @@
 let chatData={};
+// Front-end logic for the GroqChat web UI
+
 let currentTab='';
 
+// Show or hide the sidebar on small screens
 function toggleSidebar(){
   document.getElementById('sidebar').classList.toggle('show');
 }
 
 
+// Ensure the sidebar is hidden after selecting an item on mobile
 function hideSidebarOnMobile(){
   if(window.innerWidth<=700){
     document.getElementById('sidebar').classList.remove('show');
   }
 }
 
+// Very small Markdown renderer for messages
 function md(t){
   let h=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
@@ -20,10 +25,12 @@ function md(t){
   return h.replace(/\n/g,'<br>');
 }
 
+// Update the system prompt textarea
 function setSystem(text){
   document.getElementById('sysPrompt').value=text||'';
 }
 
+// Load the list of chats from the server
 async function loadChats(){
   const res=await fetch('/api/chats');
   chatData=await res.json();
@@ -34,6 +41,7 @@ async function loadChats(){
   renderFiles();
 }
 
+// Render the directory tabs
 function renderTabs(order){
   const tabs=document.getElementById('tabButtons');
   tabs.innerHTML='';
@@ -46,6 +54,7 @@ function renderTabs(order){
   });
 }
 
+// Display chat entries for the current tab
 function renderFiles(){
   const list=document.getElementById('fileList');
   list.innerHTML='';
@@ -83,6 +92,7 @@ function renderFiles(){
   });
 }
 
+// Load an individual chat file
 async function loadChat(name){
   const res=await fetch('/api/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
   const data=await res.json();
@@ -90,6 +100,7 @@ async function loadChat(name){
   hideSidebarOnMobile();
 }
 
+// Send the updated system prompt to the server
 async function updateSystem(){
   const text=document.getElementById('sysPrompt').value;
   const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'/system '+text})});
@@ -97,6 +108,7 @@ async function updateSystem(){
   showMessages(data.chat,data.result);
 }
 
+// Send the message typed by the user
 async function sendMsg(){
   const t=document.getElementById('msg');
   const text=t.value;t.value='';
@@ -106,35 +118,41 @@ async function sendMsg(){
   hideSidebarOnMobile();
 }
 
+// Move a chat into the archive
 async function archiveFile(name){
   await fetch('/api/archive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
   loadChats();
 }
 
 async function restoreFile(name){
+  // Move a chat out of the archive
   await fetch('/api/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
   loadChats();
 }
 
 async function deleteFile(name){
+  // Permanently delete an archived chat
   if(!confirm('Delete permanently?')) return;
   await fetch('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
   loadChats();
 }
 
 async function clearArchive(){
+  // Remove all chats from the archive directory
   if(!confirm('Delete all archived chats?')) return;
   await fetch('/api/clear-archive',{method:'POST'});
   loadChats();
 }
 
 async function updateServer(){
+  // Fetch the latest code and restart the server
   if(!confirm('Update and restart server?')) return;
   await fetch('/api/update',{method:'POST'});
   setTimeout(()=>location.reload(),2000);
 }
 
 async function updateApiKey(){
+  // Send a new API key to the server
   const key=document.getElementById('apiKeyInput').value.trim();
   if(!key) return;
   await fetch('/api/api-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})});
@@ -143,6 +161,7 @@ async function updateApiKey(){
 }
 
 async function newChat(){
+  // Start a new chat session
   const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'/new'})});
   const data=await res.json();
   showMessages(data.chat,data.result);
@@ -150,6 +169,7 @@ async function newChat(){
 }
 
 function showMessages(chat,res){
+  // Render the message history and any system responses
   const msgs=chat.messages;
   document.getElementById('chatName').textContent=chat.name||'';
   document.getElementById('chatPath').textContent=chat.file||'';
@@ -211,4 +231,5 @@ function showMessages(chat,res){
 }
 
 loadChats();
+// Load the most recent chat when the page first opens
 fetch('/api/chat').then(r=>r.json()).then(d=>showMessages(d));

@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Main HTML page for the GroqChat web application -->
 <html>
 <head>
   <meta charset='utf-8'>
@@ -75,12 +76,14 @@
 </head>
 <body>
   <button id='menuButton' onclick='toggleSidebar()'>☰</button>
+  <!-- Sidebar with chat list and controls -->
   <div id='sidebar'>
     <h3>Chats</h3>
     <button id='newChatBtn' onclick='newChat()'>New Chat</button>
     <div id='tabButtons'></div>
     <div id='fileList'></div>
     <button id='clearArchiveBtn' style='display:none' onclick='clearArchive()'>Clear All</button>
+    <!-- Command inputs for API key and server update -->
     <details id='cmdBox'>
       <summary>Commands</summary>
       <div id='commandBar'>
@@ -92,6 +95,7 @@
       </div>
     </details>
   </div>
+  <!-- Main chat area -->
   <div id='chat'>
     <div id='chatHeader'>
       <div id='chatName'></div>
