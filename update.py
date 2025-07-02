@@ -8,6 +8,8 @@ minimal so that it can be run from both the web UI and the command line.
 import os
 import requests
 
+from typing import Optional
+
 
 # Base URL to the raw files in the repository
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/Fleench/GroqChat/main/"
@@ -24,28 +26,37 @@ LOCAL_FILE_PATHS = [
 ]
 
 
-def fetch_file_from_github(file_path: str) -> bytes:
+def fetch_file_from_github(file_path: str) -> Optional[bytes]:
     """Retrieve the latest version of ``file_path`` from GitHub."""
 
     url = f"{GITHUB_REPO_URL}{file_path}"
-    response = requests.get(url)
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"Failed to fetch {file_path}: {exc}")
+        return None
     return response.content
 
 
-def update_local_file(file_path: str) -> None:
+def update_local_file(file_path: str) -> bool:
     """Overwrite ``file_path`` with the version fetched from GitHub."""
 
     fetched_file = fetch_file_from_github(file_path)
+    if fetched_file is None:
+        print(f"Skipped updating {file_path}")
+        return False
     with open(file_path, "wb") as f:
         f.write(fetched_file)
+    return True
 
 
 def update_all_files() -> None:
     """Update each file listed in ``LOCAL_FILE_PATHS``."""
 
     for file_path in LOCAL_FILE_PATHS:
-        update_local_file(file_path)
-        print(f"Updated {file_path}")
+        if update_local_file(file_path):
+            print(f"Updated {file_path}")
 
 
 if __name__ == "__main__":
