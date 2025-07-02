@@ -19,6 +19,12 @@ function hideSidebarOnMobile(){
   }
 }
 
+// Keep the newest messages visible when updating the chat
+function scrollMessagesToEnd(){
+  const msgDiv=document.getElementById('messages');
+  msgDiv.scrollTop=msgDiv.scrollHeight;
+}
+
 // Very small Markdown renderer for messages
 function md(t){
   let h=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -230,6 +236,8 @@ function showMessages(chat,res){
   if(chat.summary){
     document.getElementById('summaryText').textContent=chat.summary;
   }
+  // ensure the scroll position follows new messages
+  scrollMessagesToEnd();
   loadChats();
 }
 
