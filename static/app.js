@@ -5,7 +5,10 @@ let currentTab='';
 
 // Show or hide the sidebar on small screens
 function toggleSidebar(){
-  document.getElementById('sidebar').classList.toggle('show');
+  const sb=document.getElementById('sidebar');
+  const btn=document.getElementById('menuButton');
+  sb.classList.toggle('show');
+  btn.classList.toggle('open',sb.classList.contains('show'));
 }
 
 
