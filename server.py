@@ -11,6 +11,7 @@ from datetime import datetime
 import subprocess
 import sys
 import threading
+import secrets
 from dotenv import load_dotenv, set_key
 
 # Load variables from .env first and fall back to system environment values
@@ -42,12 +43,24 @@ async def verify_app_key(request: Request, call_next):
     response = await call_next(request)
     return response
 
-# Prepare the chat environment and start a session on startup
+# Prepare the chat environment and start a default session on startup
 logic.ensure_directories()
 client = logic.setup_client()
 MODEL = logic.MODEL
-chat_data, active_filename = logic.get_new_session_state()
-messages = chat_data["messages"]
+
+# Per-client session storage
+sessions = {}
+
+
+def get_session(request: Request, response: Response):
+    """Return session state for the requesting client."""
+    sid = request.cookies.get("session_id")
+    if not sid or sid not in sessions:
+        sid = secrets.token_hex(16)
+        chat_data, active_filename = logic.get_new_session_state()
+        sessions[sid] = {"chat_data": chat_data, "active": active_filename}
+        response.set_cookie("session_id", sid)
+    return sid, sessions[sid]
 
 
 def summarize(messages):
@@ -198,10 +211,10 @@ def clear_archive() -> bool:
     return success
 
 
-def handle_command(user_input):
-    """Process a slash command from the UI and return a response dict."""
+def handle_command(user_input, chat_data, messages, active_filename):
+    """Process a slash command from the UI and return a response dict along with updated state."""
 
-    global chat_data, messages, active_filename, MODEL
+    global MODEL
     parts = user_input.split()
     cmd = parts[0]
     if cmd == '/new':
@@ -213,10 +226,10 @@ def handle_command(user_input):
                 f"created at '{os.path.join(logic.CHAT_HISTORY_DIR, active_filename)}' "
                 "after your first message"
             )
-        }
+        }, chat_data, active_filename
     elif cmd == '/save':
         if len(parts) < 2:
-            return {"error": "Usage: /save <name>"}
+            return {"error": "Usage: /save <name>"}, chat_data, active_filename
         name = parts[1]
         if not name.endswith('.chat'):
             name += '.chat'
@@ -224,11 +237,11 @@ def handle_command(user_input):
         success, path = logic.save_chat_to_file(full, chat_data)
         if success:
             active_filename = full
-            return {"system": f"Chat saved to {path}"}
-        return {"error": "Could not save chat"}
+            return {"system": f"Chat saved to {path}"}, chat_data, active_filename
+        return {"error": "Could not save chat"}, chat_data, active_filename
     elif cmd == '/load':
         if len(parts) < 2:
-            return {"error": "Usage: /load <name>"}
+            return {"error": "Usage: /load <name>"}, chat_data, active_filename
         name = parts[1]
         if not name.endswith('.chat'):
             name += '.chat'
@@ -237,40 +250,40 @@ def handle_command(user_input):
             chat_data = loaded
             messages = chat_data['messages']
             active_filename = loaded_path or name
-            return {"system": f"Chat '{chat_data['name']}' loaded"}
-        return {"error": f"File {name} not found"}
+            return {"system": f"Chat '{chat_data['name']}' loaded"}, chat_data, active_filename
+        return {"error": f"File {name} not found"}, chat_data, active_filename
     elif cmd == '/chats':
-        return {"chats": list_chats()}
+        return {"chats": list_chats()}, chat_data, active_filename
     elif cmd == '/system':
         if len(parts) < 2:
-            return {"error": "Usage: /system <prompt>"}
+            return {"error": "Usage: /system <prompt>"}, chat_data, active_filename
         new_prompt = " ".join(parts[1:])
         chat_data['messages'][0] = {"role": "system", "content": new_prompt}
         logic.save_chat_to_file(active_filename, chat_data)
-        return {"system": "System prompt updated"}
+        return {"system": "System prompt updated"}, chat_data, active_filename
     elif cmd == '/prompt':
         if len(parts) < 2:
             return {"error": "Usage: /prompt <new|use|list|sys>"}
         action = parts[1]
         if action == 'new':
             if len(parts) < 4:
-                return {"error": "Usage: /prompt new <name> <text>"}
+                return {"error": "Usage: /prompt new <name> <text>"}, chat_data, active_filename
             name = parts[2]
             text = " ".join(parts[3:])
             success, path = logic.save_prompt(name, text)
             if success:
-                return {"system": f"Prompt '{name}' saved to {path}"}
-            return {"error": f"Could not save prompt {name}"}
+                return {"system": f"Prompt '{name}' saved to {path}"}, chat_data, active_filename
+            return {"error": f"Could not save prompt {name}"}, chat_data, active_filename
         elif action == 'list':
             names = logic.list_prompts()
-            return {"prompts": names}
+            return {"prompts": names}, chat_data, active_filename
         elif action == 'use':
             if len(parts) < 3:
-                return {"error": "Usage: /prompt use <name>"}
+                return {"error": "Usage: /prompt use <name>"}, chat_data, active_filename
             name = parts[2]
             text = logic.load_prompt(name)
             if text is None:
-                return {"error": f"Prompt {name} not found"}
+                return {"error": f"Prompt {name} not found"}, chat_data, active_filename
             messages.append({"role": "user", "content": text})
             logic.save_chat_to_file(active_filename, chat_data)
             completion = client.chat.completions.create(
@@ -282,33 +295,33 @@ def handle_command(user_input):
             assistant_response = completion.choices[0].message.content
             messages.append({"role": "assistant", "content": assistant_response})
             logic.save_chat_to_file(active_filename, chat_data)
-            return {"assistant": assistant_response}
+            return {"assistant": assistant_response}, chat_data, active_filename
         elif action in ('sys', 'system'):
             if len(parts) < 3:
-                return {"error": "Usage: /prompt sys <name>"}
+                return {"error": "Usage: /prompt sys <name>"}, chat_data, active_filename
             name = parts[2]
             text = logic.load_prompt(name)
             if text is None:
-                return {"error": f"Prompt {name} not found"}
+                return {"error": f"Prompt {name} not found"}, chat_data, active_filename
             chat_data['messages'][0] = {"role": "system", "content": text}
             logic.save_chat_to_file(active_filename, chat_data)
-            return {"system": f"System prompt set from {name}"}
+            return {"system": f"System prompt set from {name}"}, chat_data, active_filename
         else:
-            return {"error": "Unknown prompt command"}
+            return {"error": "Unknown prompt command"}, chat_data, active_filename
     elif cmd == '/summary':
         s = summarize(messages)
         chat_data['summary'] = s
         logic.save_chat_to_file(active_filename, chat_data)
-        return {"summary": s}
+        return {"summary": s}, chat_data, active_filename
     elif cmd == '/search':
         if len(parts) < 2:
-            return {"error": "Usage: /search <term>"}
+            return {"error": "Usage: /search <term>"}, chat_data, active_filename
         term = " ".join(parts[1:])
-        return {"results": search_messages(messages, term)}
+        return {"results": search_messages(messages, term)}, chat_data, active_filename
     elif cmd == '/export':
         name = parts[1] if len(parts) > 1 else ''
         path = logic.export_chat(chat_data, name)
-        return {"system": f"Exported to {path}"}
+        return {"system": f"Exported to {path}"}, chat_data, active_filename
     elif cmd == '/update':
         script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -319,15 +332,15 @@ def handle_command(user_input):
             os.execl(sys.executable, sys.executable, server_path)
 
         threading.Thread(target=do_update, daemon=True).start()
-        return {"system": "Updating server..."}
+        return {"system": "Updating server..."}, chat_data, active_filename
     elif cmd == '/model':
         if len(parts) == 1:
-            return {"system": f"Current model: {MODEL}"}
+            return {"system": f"Current model: {MODEL}"}, chat_data, active_filename
         if parts[1] == 'select':
-            return {"models": logic.AVAILABLE_MODELS}
+            return {"models": logic.AVAILABLE_MODELS}, chat_data, active_filename
         MODEL = parts[1]
         chat_data['model'] = MODEL
-        return {"system": f"Model set to {MODEL}"}
+        return {"system": f"Model set to {MODEL}"}, chat_data, active_filename
     elif cmd == '/info':
         path = os.path.join(logic.CHAT_HISTORY_DIR, active_filename)
         mtime = "unknown"
@@ -340,17 +353,16 @@ def handle_command(user_input):
             "model": chat_data['model'],
             "messages": len(messages)-1,
             "mtime": mtime,
-        }
+        }, chat_data, active_filename
     else:
-        return {"error": f"Unknown command {cmd}"}
+        return {"error": f"Unknown command {cmd}"}, chat_data, active_filename
 
 
-def process_message(text):
-    """Handle a user message or command and return the response."""
+def process_message(text, chat_data, messages, active_filename):
+    """Handle a user message or command and return the response along with updated state."""
 
-    global chat_data, messages
     if text.startswith('/'):
-        return handle_command(text)
+        return handle_command(text, chat_data, messages, active_filename)
     messages.append({"role": "user", "content": text})
     logic.save_chat_to_file(active_filename, chat_data)
     context = messages[-logic.HISTORY_LIMIT:]
@@ -370,10 +382,10 @@ def process_message(text):
         if new_name:
             chat_data['name'] = new_name
             logic.save_chat_to_file(active_filename, chat_data)
-    return {"assistant": assistant_response}
+    return {"assistant": assistant_response}, chat_data, active_filename
 
 
-def get_chat_state():
+def get_chat_state(chat_data, active_filename):
     """Return chat data with the active filename."""
     data = dict(chat_data)
     data["file"] = active_filename
@@ -381,9 +393,10 @@ def get_chat_state():
 
 
 @app.get('/api/chat')
-async def get_chat():
+async def get_chat(request: Request, response: Response):
     """Return the current chat including pending messages."""
-    return get_chat_state()
+    _, sess = get_session(request, response)
+    return get_chat_state(sess["chat_data"], sess["active"])
 
 
 @app.get('/api/chats')
@@ -393,10 +406,16 @@ async def get_chats():
 
 
 @app.post('/api/load')
-async def api_load(data: dict):
+async def api_load(data: dict, request: Request, response: Response):
     """Load a chat file and return the updated state."""
-    res = handle_command(f"/load {data.get('filename','')}")
-    return {"result": res, "chat": get_chat_state()}
+    _, sess = get_session(request, response)
+    chat_data = sess["chat_data"]
+    active_filename = sess["active"]
+    messages = chat_data["messages"]
+    res, chat_data, active_filename = handle_command(f"/load {data.get('filename','')}", chat_data, messages, active_filename)
+    sess["chat_data"] = chat_data
+    sess["active"] = active_filename
+    return {"result": res, "chat": get_chat_state(chat_data, active_filename)}
 
 
 @app.post('/api/archive')
@@ -460,10 +479,16 @@ async def api_update(background_tasks: BackgroundTasks):
 
 
 @app.post('/api/message')
-async def api_message(data: dict):
+async def api_message(data: dict, request: Request, response: Response):
     """Process a chat message or command."""
-    res = process_message(data.get('message',''))
-    return {"result": res, "chat": get_chat_state()}
+    _, sess = get_session(request, response)
+    chat_data = sess["chat_data"]
+    active_filename = sess["active"]
+    messages = chat_data["messages"]
+    res, chat_data, active_filename = process_message(data.get('message',''), chat_data, messages, active_filename)
+    sess["chat_data"] = chat_data
+    sess["active"] = active_filename
+    return {"result": res, "chat": get_chat_state(chat_data, active_filename)}
 
 
 @app.get('/manifest.json')
