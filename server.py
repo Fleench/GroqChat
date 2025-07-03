@@ -498,7 +498,8 @@ async def manifest():
         "name": "GroqChat",
         "short_name": "GroqChat",
         "start_url": "/",
-        "display": "standalone",
+        "display": "fullscreen",
+        "display_override": ["fullscreen", "standalone"],
         "background_color": "#ffffff",
         "theme_color": "#ffffff",
         "icons": [
