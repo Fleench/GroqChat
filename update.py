@@ -6,6 +6,8 @@ minimal so that it can be run from both the web UI and the command line.
 """
 
 import os
+import subprocess
+import sys
 import requests
 
 from typing import Optional
@@ -23,6 +25,8 @@ LOCAL_FILE_PATHS = [
     "static/app.js",
     # Include this script so it stays up to date as well
     "update.py",
+    # Keep dependencies in sync
+    "requirements.txt",
 ]
 
 
@@ -59,7 +63,23 @@ def update_all_files() -> None:
             print(f"Updated {file_path}")
 
 
+def install_requirements() -> None:
+    """Install dependencies listed in ``requirements.txt``."""
+
+    req_file = "requirements.txt"
+    if not os.path.exists(req_file):
+        return
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", req_file],
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"Failed to install dependencies: {exc}")
+
+
 if __name__ == "__main__":
     # When executed directly, update the files and notify the user.
     update_all_files()
+    install_requirements()
     print("Update complete!")
