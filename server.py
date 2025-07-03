@@ -1,7 +1,7 @@
 """FastAPI server exposing the GroqChat web interface and REST API."""
 
 from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -464,6 +464,37 @@ async def api_message(data: dict):
     """Process a chat message or command."""
     res = process_message(data.get('message',''))
     return {"result": res, "chat": get_chat_state()}
+
+
+@app.get('/manifest.json')
+async def manifest():
+    """Return the web app manifest."""
+    data = {
+        "name": "GroqChat",
+        "short_name": "GroqChat",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#ffffff",
+        "theme_color": "#ffffff",
+        "icons": [
+            {
+                "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAADdvvtQAAAB6klEQVR4nO3SQQ0AIRDAwOMcrH+zeKAPQjKjoI+umfng1H87gLcZiMRAJAYiMRCJgUgMRGIgEgORGIjEQCQGIjEQiYFIDERiIBIDkRiIxEAkBiIxEImBSAxEYiASA5EYiMRAJAYiMRCJgUgMRGIgEgORGIjEQCQGIjEQiYFIDERiIBIDkRiIxEAkBiIxEImBSAxEYiASA5EYiMRAJAYiMRCJgUgMRGIgEgORGIjEQCQGIjEQiYFIDERiIBIDkRiIxEAkBiIxEImBSAxEYiASA5EYiMRAJAYiMRCJgUgMRGIgEgORGIjEQCQGIjEQiYFIDERiIBIDkRiIxEAkBiIxEImBSAxEYiASA5EYiMRAJAYiMRCJgUgMRGIgEgORGIjEQCQGIjEQiYFIDERiIBIDkRiIxEAkBiIxEImBSAxEYiASA5EYiMRAJAYiMRCJgUgMRGIgEgORGIjEQCQGIjEQiYFIDERiIBIDkRiIxEAkBiIxEImBSAxEsgGOvgGzAbO4jAAAAABJRU5ErkJggg==",
+                "sizes": "192x192",
+                "type": "image/png"
+            }
+        ]
+    }
+    return Response(json.dumps(data), media_type="application/manifest+json")
+
+
+@app.get('/sw.js')
+async def service_worker():
+    """Serve a minimal service worker for installability."""
+    sw = """
+self.addEventListener('install', e => self.skipWaiting());
+self.addEventListener('activate', e => self.clients.claim());
+"""
+    return Response(sw, media_type="application/javascript")
 
 
 
