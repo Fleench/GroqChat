@@ -71,7 +71,7 @@ def install_requirements() -> None:
         return
     try:
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", req_file],
+            [sys.executable, "-m", "pip", "install", "-r", "--break-system-packages", req_file],
             check=True,
         )
     except subprocess.CalledProcessError as exc:
