@@ -77,8 +77,10 @@
     @media (max-width: 700px) {
       body{flex-direction:column;font-size:18px}
       #sidebar{position:fixed;top:0;left:0;height:100vh;width:var(--sidebar-width);border-bottom:none;transform:translateX(calc(-1 * (var(--sidebar-width) + 10px)));transition:transform .3s;z-index:10;border-radius:12px}
+      #sidebar.show{width:100%}
       #chat{flex:1;margin-left:0;margin-top:50px}
       #menuButton{display:block}
+      #menuButton.open{left:10px}
       .chat-name{font-size:16px}
       .chat-file{font-size:14px}
       #chatName{font-size:20px}
