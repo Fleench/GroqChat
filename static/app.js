@@ -121,6 +121,15 @@ async function updateSystem(){
 async function sendMsg(){
   const t=document.getElementById('msg');
   const text=t.value;t.value='';
+  if(!text.trim()) return;
+  // Show the message immediately while waiting for the server
+  const div=document.getElementById('messages');
+  const p=document.createElement('div');
+  p.className='message user';
+  p.innerHTML=md(text);
+  div.appendChild(p);
+  scrollMessagesToEnd();
+
   const res=await fetch('/api/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
   const data=await res.json();
   showMessages(data.chat,data.result);
